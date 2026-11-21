@@ -1,0 +1,41 @@
+{
+  "name": "migrateproof",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Automated database migration safety lab for PostgreSQL",
+  "license": "MIT",
+  "type": "module",
+  "engines": {
+    "node": "^24.0.0"
+  },
+  "scripts": {
+    "lab": "node src/cli.ts",
+    "api": "node src/server.ts",
+    "dev": "next dev --hostname 127.0.0.1",
+    "start": "next start --hostname 127.0.0.1",
+    "build": "next build",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run test/unit.test.ts",
+    "test:integration": "vitest run test/integration.test.ts",
+    "test:browser": "playwright test",
+    "verify": "npm run typecheck && npm test && npm run test:integration && npm run lab -- verify && npm run build && npm run test:browser"
+  },
+  "dependencies": {
+    "fastify": "5.12.8",
+    "libpg-query": "17.8.3",
+    "next": "16.4.6",
+    "pg": "8.23.1",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "zod": "^4.3.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.65.1",
+    "@types/node": "^24.0.0",
+    "@types/pg": "^8.15.0",
+    "@types/react": "^19.2.0",
+    "@types/react-dom": "^19.2.0",
+    "typescript": "~5.9.3",
+    "vitest": "5.1.1"
+  }
+}

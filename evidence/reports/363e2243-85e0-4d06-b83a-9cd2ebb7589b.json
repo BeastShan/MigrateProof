@@ -1,0 +1,699 @@
+{
+  "version": 1,
+  "id": "363e2243-85e0-4d06-b83a-9cd2ebb7589b",
+  "scenario": {
+    "id": "not-null",
+    "title": "Unsafe NOT NULL constraint",
+    "description": "Enforce a delivery state before filling existing null values.",
+    "correctionAvailable": true,
+    "analysis": {
+      "statementCount": 1,
+      "risks": [
+        {
+          "code": "NOT_NULL_VALIDATION",
+          "category": "structural-risk",
+          "severity": "high",
+          "statement": 1,
+          "explanation": "Existing NULL values violate the proposed constraint."
+        },
+        {
+          "code": "CONSTRAINT_CHANGE",
+          "category": "structural-risk",
+          "severity": "medium",
+          "statement": 1,
+          "explanation": "Check existing rows and verify writes under the new constraint."
+        },
+        {
+          "code": "LOCKING",
+          "category": "potential-risk",
+          "severity": "medium",
+          "statement": 1,
+          "explanation": "Confirm required locks and set bounded lock and statement timeouts."
+        }
+      ],
+      "unverifiedAssumptions": [
+        "Production workload, data distribution, size, and concurrent sessions remain unverified.",
+        "Application behavior and automated rollback require execution evidence and human review.",
+        "A clean static analysis result provides no production safety guarantee."
+      ]
+    }
+  },
+  "startedAt": "2026-11-21T11:10:13.893Z",
+  "completedAt": "2026-11-21T11:10:23.831Z",
+  "dataClassification": "synthetic-demo",
+  "postgresVersion": "17.12 (Debian 17.12-1.pgdg12+1)",
+  "postgresImage": "postgres:17-bookworm@sha256:837bed18782820fe967067cb5328b02b0d9992c1be9a37ee0c9c492cfc03af3b",
+  "source": {
+    "schemaSql": "CREATE TABLE deliveries (id integer PRIMARY KEY, state text);\n",
+    "seedSql": "INSERT INTO deliveries VALUES (1, 'sent'), (2, NULL), (3, NULL);\n",
+    "baselineSha256": "44f61a4bc1009441dbda14fd13abb70df4b517b2149bb1bb6f8de631e73072ca",
+    "proposedSha256": "b2a70439169665f7145e20a25b3cb15ed85d3328dab8fc780beb6f49be30f6a0",
+    "correctionSha256": "45cf2dca208789d4c87f056e85088c9cebe81179b8288aea8de30120c868b0ca"
+  },
+  "proposed": {
+    "setup": [
+      {
+        "label": "Create baseline schema",
+        "sql": "CREATE TABLE deliveries (id integer PRIMARY KEY, state text);\n",
+        "status": "ok",
+        "elapsedMs": 1.8652020000008633,
+        "commands": [
+          {
+            "command": "CREATE",
+            "rowCount": null
+          }
+        ],
+        "sqlState": null,
+        "detail": null
+      },
+      {
+        "label": "Seed deterministic synthetic records",
+        "sql": "INSERT INTO deliveries VALUES (1, 'sent'), (2, NULL), (3, NULL);\n",
+        "status": "ok",
+        "elapsedMs": 0.40851199999815435,
+        "commands": [
+          {
+            "command": "INSERT",
+            "rowCount": 3
+          }
+        ],
+        "sqlState": null,
+        "detail": null
+      }
+    ],
+    "baseline": {
+      "schema": [
+        {
+          "kind": "column",
+          "relation": "deliveries",
+          "name": "id",
+          "definition": "integer",
+          "nullable": false,
+          "generated": null
+        },
+        {
+          "kind": "column",
+          "relation": "deliveries",
+          "name": "state",
+          "definition": "text",
+          "nullable": true,
+          "generated": null
+        },
+        {
+          "kind": "constraint",
+          "relation": "deliveries",
+          "name": "deliveries_pkey",
+          "definition": "PRIMARY KEY (id)"
+        },
+        {
+          "kind": "index",
+          "relation": "deliveries",
+          "name": "deliveries_pkey",
+          "definition": "CREATE UNIQUE INDEX deliveries_pkey ON public.deliveries USING btree (id)"
+        }
+      ],
+      "compatibility": [
+        {
+          "name": "Existing delivery lookup",
+          "passed": true,
+          "expectedSqlState": null,
+          "execution": {
+            "label": "Existing delivery lookup",
+            "sql": "SELECT state FROM deliveries WHERE id = 1",
+            "status": "ok",
+            "elapsedMs": 0.183417999996891,
+            "commands": [
+              {
+                "command": "SELECT",
+                "rowCount": 1
+              }
+            ],
+            "sqlState": null,
+            "detail": null
+          },
+          "rows": [
+            {
+              "state": "sent"
+            }
+          ]
+        }
+      ],
+      "integrity": [
+        {
+          "name": "Fixture row count",
+          "passed": true,
+          "expectedSqlState": null,
+          "execution": {
+            "label": "Fixture row count",
+            "sql": "SELECT count(*)::int AS total FROM deliveries",
+            "status": "ok",
+            "elapsedMs": 0.30012499999793363,
+            "commands": [
+              {
+                "command": "SELECT",
+                "rowCount": 1
+              }
+            ],
+            "sqlState": null,
+            "detail": null
+          },
+          "rows": [
+            {
+              "total": 3
+            }
+          ]
+        },
+        {
+          "name": "Rows missing a delivery state",
+          "passed": true,
+          "expectedSqlState": null,
+          "execution": {
+            "label": "Rows missing a delivery state",
+            "sql": "SELECT id FROM deliveries WHERE state IS NULL ORDER BY id",
+            "status": "ok",
+            "elapsedMs": 0.2105569999985164,
+            "commands": [
+              {
+                "command": "SELECT",
+                "rowCount": 2
+              }
+            ],
+            "sqlState": null,
+            "detail": null
+          },
+          "rows": [
+            {
+              "id": 2
+            },
+            {
+              "id": 3
+            }
+          ]
+        }
+      ],
+      "plan": null
+    },
+    "migration": {
+      "label": "Apply proposed migration",
+      "sql": "ALTER TABLE deliveries ALTER COLUMN state SET NOT NULL;\n",
+      "status": "error",
+      "elapsedMs": 0.7875290000010864,
+      "commands": [],
+      "sqlState": "23502",
+      "detail": "Existing data violates a NOT NULL constraint."
+    },
+    "disposition": "rolled-back",
+    "diagnostics": [
+      {
+        "name": "Transaction rolled back",
+        "passed": true,
+        "expectedSqlState": null,
+        "execution": {
+          "label": "Close migration transaction",
+          "sql": "ROLLBACK",
+          "status": "ok",
+          "elapsedMs": 0.20666200000050594,
+          "commands": [
+            {
+              "command": "ROLLBACK",
+              "rowCount": null
+            }
+          ],
+          "sqlState": null,
+          "detail": null
+        },
+        "rows": []
+      }
+    ],
+    "after": {
+      "schema": [
+        {
+          "kind": "column",
+          "relation": "deliveries",
+          "name": "id",
+          "definition": "integer",
+          "nullable": false,
+          "generated": null
+        },
+        {
+          "kind": "column",
+          "relation": "deliveries",
+          "name": "state",
+          "definition": "text",
+          "nullable": true,
+          "generated": null
+        },
+        {
+          "kind": "constraint",
+          "relation": "deliveries",
+          "name": "deliveries_pkey",
+          "definition": "PRIMARY KEY (id)"
+        },
+        {
+          "kind": "index",
+          "relation": "deliveries",
+          "name": "deliveries_pkey",
+          "definition": "CREATE UNIQUE INDEX deliveries_pkey ON public.deliveries USING btree (id)"
+        }
+      ],
+      "compatibility": [
+        {
+          "name": "Existing delivery lookup",
+          "passed": true,
+          "expectedSqlState": null,
+          "execution": {
+            "label": "Existing delivery lookup",
+            "sql": "SELECT state FROM deliveries WHERE id = 1",
+            "status": "ok",
+            "elapsedMs": 0.20031599999856553,
+            "commands": [
+              {
+                "command": "SELECT",
+                "rowCount": 1
+              }
+            ],
+            "sqlState": null,
+            "detail": null
+          },
+          "rows": [
+            {
+              "state": "sent"
+            }
+          ]
+        }
+      ],
+      "integrity": [
+        {
+          "name": "Fixture row count",
+          "passed": true,
+          "expectedSqlState": null,
+          "execution": {
+            "label": "Fixture row count",
+            "sql": "SELECT count(*)::int AS total FROM deliveries",
+            "status": "ok",
+            "elapsedMs": 0.23587100000077044,
+            "commands": [
+              {
+                "command": "SELECT",
+                "rowCount": 1
+              }
+            ],
+            "sqlState": null,
+            "detail": null
+          },
+          "rows": [
+            {
+              "total": 3
+            }
+          ]
+        },
+        {
+          "name": "Rows missing a delivery state",
+          "passed": true,
+          "expectedSqlState": null,
+          "execution": {
+            "label": "Rows missing a delivery state",
+            "sql": "SELECT id FROM deliveries WHERE state IS NULL ORDER BY id",
+            "status": "ok",
+            "elapsedMs": 0.2754139999997278,
+            "commands": [
+              {
+                "command": "SELECT",
+                "rowCount": 2
+              }
+            ],
+            "sqlState": null,
+            "detail": null
+          },
+          "rows": [
+            {
+              "id": 2
+            },
+            {
+              "id": 3
+            }
+          ]
+        }
+      ],
+      "plan": null
+    }
+  },
+  "correction": {
+    "setup": [
+      {
+        "label": "Create baseline schema",
+        "sql": "CREATE TABLE deliveries (id integer PRIMARY KEY, state text);\n",
+        "status": "ok",
+        "elapsedMs": 2.9397639999988314,
+        "commands": [
+          {
+            "command": "CREATE",
+            "rowCount": null
+          }
+        ],
+        "sqlState": null,
+        "detail": null
+      },
+      {
+        "label": "Seed deterministic synthetic records",
+        "sql": "INSERT INTO deliveries VALUES (1, 'sent'), (2, NULL), (3, NULL);\n",
+        "status": "ok",
+        "elapsedMs": 0.7422330000008515,
+        "commands": [
+          {
+            "command": "INSERT",
+            "rowCount": 3
+          }
+        ],
+        "sqlState": null,
+        "detail": null
+      }
+    ],
+    "baseline": {
+      "schema": [
+        {
+          "kind": "column",
+          "relation": "deliveries",
+          "name": "id",
+          "definition": "integer",
+          "nullable": false,
+          "generated": null
+        },
+        {
+          "kind": "column",
+          "relation": "deliveries",
+          "name": "state",
+          "definition": "text",
+          "nullable": true,
+          "generated": null
+        },
+        {
+          "kind": "constraint",
+          "relation": "deliveries",
+          "name": "deliveries_pkey",
+          "definition": "PRIMARY KEY (id)"
+        },
+        {
+          "kind": "index",
+          "relation": "deliveries",
+          "name": "deliveries_pkey",
+          "definition": "CREATE UNIQUE INDEX deliveries_pkey ON public.deliveries USING btree (id)"
+        }
+      ],
+      "compatibility": [
+        {
+          "name": "Existing delivery lookup",
+          "passed": true,
+          "expectedSqlState": null,
+          "execution": {
+            "label": "Existing delivery lookup",
+            "sql": "SELECT state FROM deliveries WHERE id = 1",
+            "status": "ok",
+            "elapsedMs": 0.3458150000005844,
+            "commands": [
+              {
+                "command": "SELECT",
+                "rowCount": 1
+              }
+            ],
+            "sqlState": null,
+            "detail": null
+          },
+          "rows": [
+            {
+              "state": "sent"
+            }
+          ]
+        }
+      ],
+      "integrity": [
+        {
+          "name": "Fixture row count",
+          "passed": true,
+          "expectedSqlState": null,
+          "execution": {
+            "label": "Fixture row count",
+            "sql": "SELECT count(*)::int AS total FROM deliveries",
+            "status": "ok",
+            "elapsedMs": 0.45325799999773153,
+            "commands": [
+              {
+                "command": "SELECT",
+                "rowCount": 1
+              }
+            ],
+            "sqlState": null,
+            "detail": null
+          },
+          "rows": [
+            {
+              "total": 3
+            }
+          ]
+        },
+        {
+          "name": "Rows missing a delivery state",
+          "passed": true,
+          "expectedSqlState": null,
+          "execution": {
+            "label": "Rows missing a delivery state",
+            "sql": "SELECT id FROM deliveries WHERE state IS NULL ORDER BY id",
+            "status": "ok",
+            "elapsedMs": 0.46530199999688193,
+            "commands": [
+              {
+                "command": "SELECT",
+                "rowCount": 2
+              }
+            ],
+            "sqlState": null,
+            "detail": null
+          },
+          "rows": [
+            {
+              "id": 2
+            },
+            {
+              "id": 3
+            }
+          ]
+        }
+      ],
+      "plan": null
+    },
+    "migration": {
+      "label": "Apply correction migration",
+      "sql": "UPDATE deliveries SET state = 'pending' WHERE state IS NULL;\nALTER TABLE deliveries ALTER COLUMN state SET NOT NULL;\n",
+      "status": "ok",
+      "elapsedMs": 1.0042880000000878,
+      "commands": [
+        {
+          "command": "UPDATE",
+          "rowCount": 2
+        },
+        {
+          "command": "ALTER",
+          "rowCount": null
+        }
+      ],
+      "sqlState": null,
+      "detail": null
+    },
+    "disposition": "committed",
+    "diagnostics": [
+      {
+        "name": "Transaction committed",
+        "passed": true,
+        "expectedSqlState": null,
+        "execution": {
+          "label": "Close migration transaction",
+          "sql": "COMMIT",
+          "status": "ok",
+          "elapsedMs": 0.42270799999823794,
+          "commands": [
+            {
+              "command": "COMMIT",
+              "rowCount": null
+            }
+          ],
+          "sqlState": null,
+          "detail": null
+        },
+        "rows": []
+      }
+    ],
+    "after": {
+      "schema": [
+        {
+          "kind": "column",
+          "relation": "deliveries",
+          "name": "id",
+          "definition": "integer",
+          "nullable": false,
+          "generated": null
+        },
+        {
+          "kind": "column",
+          "relation": "deliveries",
+          "name": "state",
+          "definition": "text",
+          "nullable": false,
+          "generated": null
+        },
+        {
+          "kind": "constraint",
+          "relation": "deliveries",
+          "name": "deliveries_pkey",
+          "definition": "PRIMARY KEY (id)"
+        },
+        {
+          "kind": "index",
+          "relation": "deliveries",
+          "name": "deliveries_pkey",
+          "definition": "CREATE UNIQUE INDEX deliveries_pkey ON public.deliveries USING btree (id)"
+        }
+      ],
+      "compatibility": [
+        {
+          "name": "Existing delivery lookup",
+          "passed": true,
+          "expectedSqlState": null,
+          "execution": {
+            "label": "Existing delivery lookup",
+            "sql": "SELECT state FROM deliveries WHERE id = 1",
+            "status": "ok",
+            "elapsedMs": 0.3113819999998668,
+            "commands": [
+              {
+                "command": "SELECT",
+                "rowCount": 1
+              }
+            ],
+            "sqlState": null,
+            "detail": null
+          },
+          "rows": [
+            {
+              "state": "sent"
+            }
+          ]
+        }
+      ],
+      "integrity": [
+        {
+          "name": "Fixture row count",
+          "passed": true,
+          "expectedSqlState": null,
+          "execution": {
+            "label": "Fixture row count",
+            "sql": "SELECT count(*)::int AS total FROM deliveries",
+            "status": "ok",
+            "elapsedMs": 0.34405899999910616,
+            "commands": [
+              {
+                "command": "SELECT",
+                "rowCount": 1
+              }
+            ],
+            "sqlState": null,
+            "detail": null
+          },
+          "rows": [
+            {
+              "total": 3
+            }
+          ]
+        },
+        {
+          "name": "Missing states after backfill",
+          "passed": true,
+          "expectedSqlState": null,
+          "execution": {
+            "label": "Missing states after backfill",
+            "sql": "SELECT id FROM deliveries WHERE state IS NULL ORDER BY id",
+            "status": "ok",
+            "elapsedMs": 0.26912300000185496,
+            "commands": [
+              {
+                "command": "SELECT",
+                "rowCount": 0
+              }
+            ],
+            "sqlState": null,
+            "detail": null
+          },
+          "rows": []
+        },
+        {
+          "name": "Backfilled values",
+          "passed": true,
+          "expectedSqlState": null,
+          "execution": {
+            "label": "Backfilled values",
+            "sql": "SELECT id, state FROM deliveries ORDER BY id",
+            "status": "ok",
+            "elapsedMs": 0.2798350000011851,
+            "commands": [
+              {
+                "command": "SELECT",
+                "rowCount": 3
+              }
+            ],
+            "sqlState": null,
+            "detail": null
+          },
+          "rows": [
+            {
+              "id": 1,
+              "state": "sent"
+            },
+            {
+              "id": 2,
+              "state": "pending"
+            },
+            {
+              "id": 3,
+              "state": "pending"
+            }
+          ]
+        },
+        {
+          "name": "New null state is rejected",
+          "passed": true,
+          "expectedSqlState": "23502",
+          "execution": {
+            "label": "New null state is rejected",
+            "sql": "INSERT INTO deliveries VALUES (4, NULL)",
+            "status": "error",
+            "elapsedMs": 0.5007129999976314,
+            "commands": [],
+            "sqlState": "23502",
+            "detail": "Existing data violates a NOT NULL constraint."
+          },
+          "rows": []
+        }
+      ],
+      "plan": null
+    }
+  },
+  "confirmedFailures": [
+    {
+      "code": "MIGRATION_ERROR",
+      "evidence": "Existing data violates a NOT NULL constraint.",
+      "sqlState": "23502"
+    }
+  ],
+  "verification": {
+    "passed": true,
+    "expectation": "PostgreSQL rejects the proposed constraint with 23502. The correction fills precisely the missing states and enforces NOT NULL."
+  },
+  "review": {
+    "required": true,
+    "status": "pending",
+    "reason": "Require explicit human review of the proposal, evidence and rollout plan before merge or deploy."
+  },
+  "followUp": [
+    "Validate that pending is appropriate for real legacy deliveries.",
+    "Plan batched backfill and constraint verification for production scale."
+  ]
+}

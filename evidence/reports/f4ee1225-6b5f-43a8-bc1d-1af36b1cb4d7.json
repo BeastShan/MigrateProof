@@ -1,0 +1,647 @@
+{
+  "version": 1,
+  "id": "f4ee1225-6b5f-43a8-bc1d-1af36b1cb4d7",
+  "scenario": {
+    "id": "lock-contention",
+    "title": "Migration lock contention",
+    "description": "Hold an independent lock while an ALTER TABLE operation waits.",
+    "correctionAvailable": true,
+    "analysis": {
+      "statementCount": 1,
+      "risks": [
+        {
+          "code": "LOCKING",
+          "category": "potential-risk",
+          "severity": "medium",
+          "statement": 1,
+          "explanation": "Confirm required locks and set bounded lock and statement timeouts."
+        }
+      ],
+      "unverifiedAssumptions": [
+        "Production workload, data distribution, size, and concurrent sessions remain unverified.",
+        "Application behavior and automated rollback require execution evidence and human review.",
+        "A clean static analysis result provides no production safety guarantee."
+      ]
+    }
+  },
+  "startedAt": "2026-11-21T11:10:42.095Z",
+  "completedAt": "2026-11-21T11:10:50.797Z",
+  "dataClassification": "synthetic-demo",
+  "postgresVersion": "17.12 (Debian 17.12-1.pgdg12+1)",
+  "postgresImage": "postgres:17-bookworm@sha256:837bed18782820fe967067cb5328b02b0d9992c1be9a37ee0c9c492cfc03af3b",
+  "source": {
+    "schemaSql": "CREATE TABLE invoices (id integer PRIMARY KEY, cents integer NOT NULL);\n",
+    "seedSql": "INSERT INTO invoices VALUES (1, 1250), (2, 2500);\n",
+    "baselineSha256": "46514f59628df1ed97505cad6853b5c7f5cdf5a4a4d4bd571036a1e76fda0ee8",
+    "proposedSha256": "67edd93c8f4cf6a8d7db7fd1ea6ef3373304d29c1e3ee77eb9c6881e418b8eb5",
+    "correctionSha256": "67edd93c8f4cf6a8d7db7fd1ea6ef3373304d29c1e3ee77eb9c6881e418b8eb5"
+  },
+  "proposed": {
+    "setup": [
+      {
+        "label": "Create baseline schema",
+        "sql": "CREATE TABLE invoices (id integer PRIMARY KEY, cents integer NOT NULL);\n",
+        "status": "ok",
+        "elapsedMs": 1.6764750000002095,
+        "commands": [
+          {
+            "command": "CREATE",
+            "rowCount": null
+          }
+        ],
+        "sqlState": null,
+        "detail": null
+      },
+      {
+        "label": "Seed deterministic synthetic records",
+        "sql": "INSERT INTO invoices VALUES (1, 1250), (2, 2500);\n",
+        "status": "ok",
+        "elapsedMs": 0.4303760000038892,
+        "commands": [
+          {
+            "command": "INSERT",
+            "rowCount": 2
+          }
+        ],
+        "sqlState": null,
+        "detail": null
+      }
+    ],
+    "baseline": {
+      "schema": [
+        {
+          "kind": "column",
+          "relation": "invoices",
+          "name": "id",
+          "definition": "integer",
+          "nullable": false,
+          "generated": null
+        },
+        {
+          "kind": "column",
+          "relation": "invoices",
+          "name": "cents",
+          "definition": "integer",
+          "nullable": false,
+          "generated": null
+        },
+        {
+          "kind": "constraint",
+          "relation": "invoices",
+          "name": "invoices_pkey",
+          "definition": "PRIMARY KEY (id)"
+        },
+        {
+          "kind": "index",
+          "relation": "invoices",
+          "name": "invoices_pkey",
+          "definition": "CREATE UNIQUE INDEX invoices_pkey ON public.invoices USING btree (id)"
+        }
+      ],
+      "compatibility": [
+        {
+          "name": "Existing invoice lookup",
+          "passed": true,
+          "expectedSqlState": null,
+          "execution": {
+            "label": "Existing invoice lookup",
+            "sql": "SELECT cents FROM invoices WHERE id = 2",
+            "status": "ok",
+            "elapsedMs": 0.1963400000022375,
+            "commands": [
+              {
+                "command": "SELECT",
+                "rowCount": 1
+              }
+            ],
+            "sqlState": null,
+            "detail": null
+          },
+          "rows": [
+            {
+              "cents": 2500
+            }
+          ]
+        }
+      ],
+      "integrity": [
+        {
+          "name": "Fixture row count",
+          "passed": true,
+          "expectedSqlState": null,
+          "execution": {
+            "label": "Fixture row count",
+            "sql": "SELECT count(*)::int AS total FROM invoices",
+            "status": "ok",
+            "elapsedMs": 0.2654160000020056,
+            "commands": [
+              {
+                "command": "SELECT",
+                "rowCount": 1
+              }
+            ],
+            "sqlState": null,
+            "detail": null
+          },
+          "rows": [
+            {
+              "total": 2
+            }
+          ]
+        }
+      ],
+      "plan": null
+    },
+    "migration": {
+      "label": "Apply proposed migration while lock is held",
+      "sql": "ALTER TABLE invoices ADD COLUMN memo text;\n",
+      "status": "error",
+      "elapsedMs": 753.639489000001,
+      "commands": [],
+      "sqlState": "55P03",
+      "detail": "PostgreSQL canceled the statement after its lock timeout."
+    },
+    "disposition": "rolled-back",
+    "diagnostics": [
+      {
+        "name": "Competing session held a table lock",
+        "passed": true,
+        "expectedSqlState": null,
+        "execution": {
+          "label": "Obtain competing lock",
+          "sql": "LOCK TABLE invoices IN ACCESS SHARE MODE",
+          "status": "ok",
+          "elapsedMs": 0.26595999999699416,
+          "commands": [
+            {
+              "command": "LOCK",
+              "rowCount": null
+            }
+          ],
+          "sqlState": null,
+          "detail": null
+        },
+        "rows": []
+      },
+      {
+        "name": "Separate session observed the expected blocker",
+        "passed": true,
+        "expectedSqlState": null,
+        "execution": {
+          "label": "Observe PostgreSQL lock waiter",
+          "sql": "\nSELECT cardinality(pg_blocking_pids(pid)) AS blocker_count,\n       $2::int = ANY(pg_blocking_pids(pid)) AS expected_blocker,\n       wait_event_type, wait_event\nFROM pg_stat_activity WHERE pid = $1;",
+          "status": "ok",
+          "elapsedMs": 3.3763850000032107,
+          "commands": [
+            {
+              "command": "SELECT",
+              "rowCount": 1
+            }
+          ],
+          "sqlState": null,
+          "detail": null
+        },
+        "rows": [
+          {
+            "blocker_count": 1,
+            "expected_blocker": true,
+            "wait_event_type": "Lock",
+            "wait_event": "relation"
+          }
+        ]
+      },
+      {
+        "name": "Competing transaction released",
+        "passed": true,
+        "expectedSqlState": null,
+        "execution": {
+          "label": "Release competing lock",
+          "sql": "ROLLBACK",
+          "status": "ok",
+          "elapsedMs": 1.0444019999995362,
+          "commands": [
+            {
+              "command": "ROLLBACK",
+              "rowCount": null
+            }
+          ],
+          "sqlState": null,
+          "detail": null
+        },
+        "rows": []
+      },
+      {
+        "name": "Transaction rolled back",
+        "passed": true,
+        "expectedSqlState": null,
+        "execution": {
+          "label": "Close migration transaction",
+          "sql": "ROLLBACK",
+          "status": "ok",
+          "elapsedMs": 0.20205999999598134,
+          "commands": [
+            {
+              "command": "ROLLBACK",
+              "rowCount": null
+            }
+          ],
+          "sqlState": null,
+          "detail": null
+        },
+        "rows": []
+      }
+    ],
+    "after": {
+      "schema": [
+        {
+          "kind": "column",
+          "relation": "invoices",
+          "name": "id",
+          "definition": "integer",
+          "nullable": false,
+          "generated": null
+        },
+        {
+          "kind": "column",
+          "relation": "invoices",
+          "name": "cents",
+          "definition": "integer",
+          "nullable": false,
+          "generated": null
+        },
+        {
+          "kind": "constraint",
+          "relation": "invoices",
+          "name": "invoices_pkey",
+          "definition": "PRIMARY KEY (id)"
+        },
+        {
+          "kind": "index",
+          "relation": "invoices",
+          "name": "invoices_pkey",
+          "definition": "CREATE UNIQUE INDEX invoices_pkey ON public.invoices USING btree (id)"
+        }
+      ],
+      "compatibility": [
+        {
+          "name": "Existing invoice lookup",
+          "passed": true,
+          "expectedSqlState": null,
+          "execution": {
+            "label": "Existing invoice lookup",
+            "sql": "SELECT cents FROM invoices WHERE id = 2",
+            "status": "ok",
+            "elapsedMs": 0.18174799999542302,
+            "commands": [
+              {
+                "command": "SELECT",
+                "rowCount": 1
+              }
+            ],
+            "sqlState": null,
+            "detail": null
+          },
+          "rows": [
+            {
+              "cents": 2500
+            }
+          ]
+        }
+      ],
+      "integrity": [
+        {
+          "name": "Fixture row count",
+          "passed": true,
+          "expectedSqlState": null,
+          "execution": {
+            "label": "Fixture row count",
+            "sql": "SELECT count(*)::int AS total FROM invoices",
+            "status": "ok",
+            "elapsedMs": 0.25442000000475673,
+            "commands": [
+              {
+                "command": "SELECT",
+                "rowCount": 1
+              }
+            ],
+            "sqlState": null,
+            "detail": null
+          },
+          "rows": [
+            {
+              "total": 2
+            }
+          ]
+        }
+      ],
+      "plan": null
+    }
+  },
+  "correction": {
+    "setup": [
+      {
+        "label": "Create baseline schema",
+        "sql": "CREATE TABLE invoices (id integer PRIMARY KEY, cents integer NOT NULL);\n",
+        "status": "ok",
+        "elapsedMs": 1.7865120000060415,
+        "commands": [
+          {
+            "command": "CREATE",
+            "rowCount": null
+          }
+        ],
+        "sqlState": null,
+        "detail": null
+      },
+      {
+        "label": "Seed deterministic synthetic records",
+        "sql": "INSERT INTO invoices VALUES (1, 1250), (2, 2500);\n",
+        "status": "ok",
+        "elapsedMs": 0.513159000001906,
+        "commands": [
+          {
+            "command": "INSERT",
+            "rowCount": 2
+          }
+        ],
+        "sqlState": null,
+        "detail": null
+      }
+    ],
+    "baseline": {
+      "schema": [
+        {
+          "kind": "column",
+          "relation": "invoices",
+          "name": "id",
+          "definition": "integer",
+          "nullable": false,
+          "generated": null
+        },
+        {
+          "kind": "column",
+          "relation": "invoices",
+          "name": "cents",
+          "definition": "integer",
+          "nullable": false,
+          "generated": null
+        },
+        {
+          "kind": "constraint",
+          "relation": "invoices",
+          "name": "invoices_pkey",
+          "definition": "PRIMARY KEY (id)"
+        },
+        {
+          "kind": "index",
+          "relation": "invoices",
+          "name": "invoices_pkey",
+          "definition": "CREATE UNIQUE INDEX invoices_pkey ON public.invoices USING btree (id)"
+        }
+      ],
+      "compatibility": [
+        {
+          "name": "Existing invoice lookup",
+          "passed": true,
+          "expectedSqlState": null,
+          "execution": {
+            "label": "Existing invoice lookup",
+            "sql": "SELECT cents FROM invoices WHERE id = 2",
+            "status": "ok",
+            "elapsedMs": 0.5173389999981737,
+            "commands": [
+              {
+                "command": "SELECT",
+                "rowCount": 1
+              }
+            ],
+            "sqlState": null,
+            "detail": null
+          },
+          "rows": [
+            {
+              "cents": 2500
+            }
+          ]
+        }
+      ],
+      "integrity": [
+        {
+          "name": "Fixture row count",
+          "passed": true,
+          "expectedSqlState": null,
+          "execution": {
+            "label": "Fixture row count",
+            "sql": "SELECT count(*)::int AS total FROM invoices",
+            "status": "ok",
+            "elapsedMs": 0.4295879999990575,
+            "commands": [
+              {
+                "command": "SELECT",
+                "rowCount": 1
+              }
+            ],
+            "sqlState": null,
+            "detail": null
+          },
+          "rows": [
+            {
+              "total": 2
+            }
+          ]
+        }
+      ],
+      "plan": null
+    },
+    "migration": {
+      "label": "Retry migration after lock release",
+      "sql": "ALTER TABLE invoices ADD COLUMN memo text;\n",
+      "status": "ok",
+      "elapsedMs": 0.7766659999979311,
+      "commands": [
+        {
+          "command": "ALTER",
+          "rowCount": null
+        }
+      ],
+      "sqlState": null,
+      "detail": null
+    },
+    "disposition": "committed",
+    "diagnostics": [
+      {
+        "name": "Competing session held a table lock",
+        "passed": true,
+        "expectedSqlState": null,
+        "execution": {
+          "label": "Obtain competing lock",
+          "sql": "LOCK TABLE invoices IN ACCESS SHARE MODE",
+          "status": "ok",
+          "elapsedMs": 0.20784299999650102,
+          "commands": [
+            {
+              "command": "LOCK",
+              "rowCount": null
+            }
+          ],
+          "sqlState": null,
+          "detail": null
+        },
+        "rows": []
+      },
+      {
+        "name": "Competing transaction released",
+        "passed": true,
+        "expectedSqlState": null,
+        "execution": {
+          "label": "Release competing lock before retry",
+          "sql": "ROLLBACK",
+          "status": "ok",
+          "elapsedMs": 0.08869200000481214,
+          "commands": [
+            {
+              "command": "ROLLBACK",
+              "rowCount": null
+            }
+          ],
+          "sqlState": null,
+          "detail": null
+        },
+        "rows": []
+      },
+      {
+        "name": "Transaction committed",
+        "passed": true,
+        "expectedSqlState": null,
+        "execution": {
+          "label": "Close migration transaction",
+          "sql": "COMMIT",
+          "status": "ok",
+          "elapsedMs": 0.2030460000023595,
+          "commands": [
+            {
+              "command": "COMMIT",
+              "rowCount": null
+            }
+          ],
+          "sqlState": null,
+          "detail": null
+        },
+        "rows": []
+      }
+    ],
+    "after": {
+      "schema": [
+        {
+          "kind": "column",
+          "relation": "invoices",
+          "name": "id",
+          "definition": "integer",
+          "nullable": false,
+          "generated": null
+        },
+        {
+          "kind": "column",
+          "relation": "invoices",
+          "name": "cents",
+          "definition": "integer",
+          "nullable": false,
+          "generated": null
+        },
+        {
+          "kind": "column",
+          "relation": "invoices",
+          "name": "memo",
+          "definition": "text",
+          "nullable": true,
+          "generated": null
+        },
+        {
+          "kind": "constraint",
+          "relation": "invoices",
+          "name": "invoices_pkey",
+          "definition": "PRIMARY KEY (id)"
+        },
+        {
+          "kind": "index",
+          "relation": "invoices",
+          "name": "invoices_pkey",
+          "definition": "CREATE UNIQUE INDEX invoices_pkey ON public.invoices USING btree (id)"
+        }
+      ],
+      "compatibility": [
+        {
+          "name": "Existing invoice lookup",
+          "passed": true,
+          "expectedSqlState": null,
+          "execution": {
+            "label": "Existing invoice lookup",
+            "sql": "SELECT cents FROM invoices WHERE id = 2",
+            "status": "ok",
+            "elapsedMs": 0.4172600000019884,
+            "commands": [
+              {
+                "command": "SELECT",
+                "rowCount": 1
+              }
+            ],
+            "sqlState": null,
+            "detail": null
+          },
+          "rows": [
+            {
+              "cents": 2500
+            }
+          ]
+        }
+      ],
+      "integrity": [
+        {
+          "name": "Fixture row count",
+          "passed": true,
+          "expectedSqlState": null,
+          "execution": {
+            "label": "Fixture row count",
+            "sql": "SELECT count(*)::int AS total FROM invoices",
+            "status": "ok",
+            "elapsedMs": 0.34608299999672454,
+            "commands": [
+              {
+                "command": "SELECT",
+                "rowCount": 1
+              }
+            ],
+            "sqlState": null,
+            "detail": null
+          },
+          "rows": [
+            {
+              "total": 2
+            }
+          ]
+        }
+      ],
+      "plan": null
+    }
+  },
+  "confirmedFailures": [
+    {
+      "code": "MIGRATION_ERROR",
+      "evidence": "PostgreSQL canceled the statement after its lock timeout.",
+      "sqlState": "55P03"
+    }
+  ],
+  "verification": {
+    "passed": true,
+    "expectation": "A second session observes the blocker. PostgreSQL cancels the blocked ALTER with 55P03, the transaction rolls back, and a retry succeeds after lock release."
+  },
+  "review": {
+    "required": true,
+    "status": "pending",
+    "reason": "Require explicit human review of the proposal, evidence and rollout plan before merge or deploy."
+  },
+  "followUp": [
+    "Schedule DDL for a short lock window and require bounded retries.",
+    "Capture blocker diagnostics in the deployment runbook."
+  ]
+}

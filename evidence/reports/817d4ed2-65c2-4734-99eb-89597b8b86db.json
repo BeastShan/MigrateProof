@@ -1,0 +1,618 @@
+{
+  "version": 1,
+  "id": "817d4ed2-65c2-4734-99eb-89597b8b86db",
+  "scenario": {
+    "id": "column-rename",
+    "title": "Breaking column rename",
+    "description": "Rename a customer column used by an existing query.",
+    "correctionAvailable": true,
+    "analysis": {
+      "statementCount": 1,
+      "risks": [
+        {
+          "code": "QUERY_COMPATIBILITY",
+          "category": "potential-risk",
+          "severity": "high",
+          "statement": 1,
+          "explanation": "Existing application queries may reference the previous identifier."
+        },
+        {
+          "code": "LOCKING",
+          "category": "potential-risk",
+          "severity": "medium",
+          "statement": 1,
+          "explanation": "Confirm required locks and set bounded lock and statement timeouts."
+        }
+      ],
+      "unverifiedAssumptions": [
+        "Production workload, data distribution, size, and concurrent sessions remain unverified.",
+        "Application behavior and automated rollback require execution evidence and human review.",
+        "A clean static analysis result provides no production safety guarantee."
+      ]
+    }
+  },
+  "startedAt": "2026-11-21T11:10:03.531Z",
+  "completedAt": "2026-11-21T11:10:13.876Z",
+  "dataClassification": "synthetic-demo",
+  "postgresVersion": "17.12 (Debian 17.12-1.pgdg12+1)",
+  "postgresImage": "postgres:17-bookworm@sha256:837bed18782820fe967067cb5328b02b0d9992c1be9a37ee0c9c492cfc03af3b",
+  "source": {
+    "schemaSql": "CREATE TABLE customers (id integer PRIMARY KEY, display_name text NOT NULL);\n",
+    "seedSql": "INSERT INTO customers VALUES (1, 'Demo Alpha'), (2, 'Demo Beta');\n",
+    "baselineSha256": "bb8b9d85a11f44214444a4860a9f8ec719811c25cce74d1defca0c14d0576175",
+    "proposedSha256": "f38a1558653487e323483e602162fc7c51572927059f2d52e6852fa9f8ee140d",
+    "correctionSha256": "b345d798adbf6c9686766186db5c0f612e0625dca43e7396d890db554e1596db"
+  },
+  "proposed": {
+    "setup": [
+      {
+        "label": "Create baseline schema",
+        "sql": "CREATE TABLE customers (id integer PRIMARY KEY, display_name text NOT NULL);\n",
+        "status": "ok",
+        "elapsedMs": 4.506620000000112,
+        "commands": [
+          {
+            "command": "CREATE",
+            "rowCount": null
+          }
+        ],
+        "sqlState": null,
+        "detail": null
+      },
+      {
+        "label": "Seed deterministic synthetic records",
+        "sql": "INSERT INTO customers VALUES (1, 'Demo Alpha'), (2, 'Demo Beta');\n",
+        "status": "ok",
+        "elapsedMs": 0.9870670000000246,
+        "commands": [
+          {
+            "command": "INSERT",
+            "rowCount": 2
+          }
+        ],
+        "sqlState": null,
+        "detail": null
+      }
+    ],
+    "baseline": {
+      "schema": [
+        {
+          "kind": "column",
+          "relation": "customers",
+          "name": "id",
+          "definition": "integer",
+          "nullable": false,
+          "generated": null
+        },
+        {
+          "kind": "column",
+          "relation": "customers",
+          "name": "display_name",
+          "definition": "text",
+          "nullable": false,
+          "generated": null
+        },
+        {
+          "kind": "constraint",
+          "relation": "customers",
+          "name": "customers_pkey",
+          "definition": "PRIMARY KEY (id)"
+        },
+        {
+          "kind": "index",
+          "relation": "customers",
+          "name": "customers_pkey",
+          "definition": "CREATE UNIQUE INDEX customers_pkey ON public.customers USING btree (id)"
+        }
+      ],
+      "compatibility": [
+        {
+          "name": "Existing customer lookup",
+          "passed": true,
+          "expectedSqlState": null,
+          "execution": {
+            "label": "Existing customer lookup",
+            "sql": "SELECT display_name FROM customers WHERE id = 1",
+            "status": "ok",
+            "elapsedMs": 0.5302740000006452,
+            "commands": [
+              {
+                "command": "SELECT",
+                "rowCount": 1
+              }
+            ],
+            "sqlState": null,
+            "detail": null
+          },
+          "rows": [
+            {
+              "display_name": "Demo Alpha"
+            }
+          ]
+        }
+      ],
+      "integrity": [
+        {
+          "name": "Fixture row count",
+          "passed": true,
+          "expectedSqlState": null,
+          "execution": {
+            "label": "Fixture row count",
+            "sql": "SELECT count(*)::int AS total FROM customers",
+            "status": "ok",
+            "elapsedMs": 0.566568999998708,
+            "commands": [
+              {
+                "command": "SELECT",
+                "rowCount": 1
+              }
+            ],
+            "sqlState": null,
+            "detail": null
+          },
+          "rows": [
+            {
+              "total": 2
+            }
+          ]
+        }
+      ],
+      "plan": null
+    },
+    "migration": {
+      "label": "Apply proposed migration",
+      "sql": "ALTER TABLE customers RENAME COLUMN display_name TO full_name;\n",
+      "status": "ok",
+      "elapsedMs": 0.2830789999989065,
+      "commands": [
+        {
+          "command": "ALTER",
+          "rowCount": null
+        }
+      ],
+      "sqlState": null,
+      "detail": null
+    },
+    "disposition": "committed",
+    "diagnostics": [
+      {
+        "name": "Transaction committed",
+        "passed": true,
+        "expectedSqlState": null,
+        "execution": {
+          "label": "Close migration transaction",
+          "sql": "COMMIT",
+          "status": "ok",
+          "elapsedMs": 0.18081600000004983,
+          "commands": [
+            {
+              "command": "COMMIT",
+              "rowCount": null
+            }
+          ],
+          "sqlState": null,
+          "detail": null
+        },
+        "rows": []
+      }
+    ],
+    "after": {
+      "schema": [
+        {
+          "kind": "column",
+          "relation": "customers",
+          "name": "id",
+          "definition": "integer",
+          "nullable": false,
+          "generated": null
+        },
+        {
+          "kind": "column",
+          "relation": "customers",
+          "name": "full_name",
+          "definition": "text",
+          "nullable": false,
+          "generated": null
+        },
+        {
+          "kind": "constraint",
+          "relation": "customers",
+          "name": "customers_pkey",
+          "definition": "PRIMARY KEY (id)"
+        },
+        {
+          "kind": "index",
+          "relation": "customers",
+          "name": "customers_pkey",
+          "definition": "CREATE UNIQUE INDEX customers_pkey ON public.customers USING btree (id)"
+        }
+      ],
+      "compatibility": [
+        {
+          "name": "Existing customer lookup",
+          "passed": false,
+          "expectedSqlState": null,
+          "execution": {
+            "label": "Existing customer lookup",
+            "sql": "SELECT display_name FROM customers WHERE id = 1",
+            "status": "error",
+            "elapsedMs": 1.486032000000705,
+            "commands": [],
+            "sqlState": "42703",
+            "detail": "The query references a column that does not exist."
+          },
+          "rows": []
+        }
+      ],
+      "integrity": [
+        {
+          "name": "Fixture row count",
+          "passed": true,
+          "expectedSqlState": null,
+          "execution": {
+            "label": "Fixture row count",
+            "sql": "SELECT count(*)::int AS total FROM customers",
+            "status": "ok",
+            "elapsedMs": 0.496660000000702,
+            "commands": [
+              {
+                "command": "SELECT",
+                "rowCount": 1
+              }
+            ],
+            "sqlState": null,
+            "detail": null
+          },
+          "rows": [
+            {
+              "total": 2
+            }
+          ]
+        },
+        {
+          "name": "Renamed column still contains fixture values",
+          "passed": true,
+          "expectedSqlState": null,
+          "execution": {
+            "label": "Renamed column still contains fixture values",
+            "sql": "SELECT full_name FROM customers ORDER BY id",
+            "status": "ok",
+            "elapsedMs": 0.35269999999945867,
+            "commands": [
+              {
+                "command": "SELECT",
+                "rowCount": 2
+              }
+            ],
+            "sqlState": null,
+            "detail": null
+          },
+          "rows": [
+            {
+              "full_name": "Demo Alpha"
+            },
+            {
+              "full_name": "Demo Beta"
+            }
+          ]
+        }
+      ],
+      "plan": null
+    }
+  },
+  "correction": {
+    "setup": [
+      {
+        "label": "Create baseline schema",
+        "sql": "CREATE TABLE customers (id integer PRIMARY KEY, display_name text NOT NULL);\n",
+        "status": "ok",
+        "elapsedMs": 2.2076909999996133,
+        "commands": [
+          {
+            "command": "CREATE",
+            "rowCount": null
+          }
+        ],
+        "sqlState": null,
+        "detail": null
+      },
+      {
+        "label": "Seed deterministic synthetic records",
+        "sql": "INSERT INTO customers VALUES (1, 'Demo Alpha'), (2, 'Demo Beta');\n",
+        "status": "ok",
+        "elapsedMs": 0.7080070000010892,
+        "commands": [
+          {
+            "command": "INSERT",
+            "rowCount": 2
+          }
+        ],
+        "sqlState": null,
+        "detail": null
+      }
+    ],
+    "baseline": {
+      "schema": [
+        {
+          "kind": "column",
+          "relation": "customers",
+          "name": "id",
+          "definition": "integer",
+          "nullable": false,
+          "generated": null
+        },
+        {
+          "kind": "column",
+          "relation": "customers",
+          "name": "display_name",
+          "definition": "text",
+          "nullable": false,
+          "generated": null
+        },
+        {
+          "kind": "constraint",
+          "relation": "customers",
+          "name": "customers_pkey",
+          "definition": "PRIMARY KEY (id)"
+        },
+        {
+          "kind": "index",
+          "relation": "customers",
+          "name": "customers_pkey",
+          "definition": "CREATE UNIQUE INDEX customers_pkey ON public.customers USING btree (id)"
+        }
+      ],
+      "compatibility": [
+        {
+          "name": "Existing customer lookup",
+          "passed": true,
+          "expectedSqlState": null,
+          "execution": {
+            "label": "Existing customer lookup",
+            "sql": "SELECT display_name FROM customers WHERE id = 1",
+            "status": "ok",
+            "elapsedMs": 0.361601000000519,
+            "commands": [
+              {
+                "command": "SELECT",
+                "rowCount": 1
+              }
+            ],
+            "sqlState": null,
+            "detail": null
+          },
+          "rows": [
+            {
+              "display_name": "Demo Alpha"
+            }
+          ]
+        }
+      ],
+      "integrity": [
+        {
+          "name": "Fixture row count",
+          "passed": true,
+          "expectedSqlState": null,
+          "execution": {
+            "label": "Fixture row count",
+            "sql": "SELECT count(*)::int AS total FROM customers",
+            "status": "ok",
+            "elapsedMs": 0.400934999999663,
+            "commands": [
+              {
+                "command": "SELECT",
+                "rowCount": 1
+              }
+            ],
+            "sqlState": null,
+            "detail": null
+          },
+          "rows": [
+            {
+              "total": 2
+            }
+          ]
+        }
+      ],
+      "plan": null
+    },
+    "migration": {
+      "label": "Apply correction migration",
+      "sql": "ALTER TABLE customers ADD COLUMN full_name text GENERATED ALWAYS AS (display_name) STORED;\n",
+      "status": "ok",
+      "elapsedMs": 1.3805300000003626,
+      "commands": [
+        {
+          "command": "ALTER",
+          "rowCount": null
+        }
+      ],
+      "sqlState": null,
+      "detail": null
+    },
+    "disposition": "committed",
+    "diagnostics": [
+      {
+        "name": "Transaction committed",
+        "passed": true,
+        "expectedSqlState": null,
+        "execution": {
+          "label": "Close migration transaction",
+          "sql": "COMMIT",
+          "status": "ok",
+          "elapsedMs": 0.6086300000006304,
+          "commands": [
+            {
+              "command": "COMMIT",
+              "rowCount": null
+            }
+          ],
+          "sqlState": null,
+          "detail": null
+        },
+        "rows": []
+      }
+    ],
+    "after": {
+      "schema": [
+        {
+          "kind": "column",
+          "relation": "customers",
+          "name": "id",
+          "definition": "integer",
+          "nullable": false,
+          "generated": null
+        },
+        {
+          "kind": "column",
+          "relation": "customers",
+          "name": "display_name",
+          "definition": "text",
+          "nullable": false,
+          "generated": null
+        },
+        {
+          "kind": "column",
+          "relation": "customers",
+          "name": "full_name",
+          "definition": "text",
+          "nullable": true,
+          "generated": "display_name"
+        },
+        {
+          "kind": "constraint",
+          "relation": "customers",
+          "name": "customers_pkey",
+          "definition": "PRIMARY KEY (id)"
+        },
+        {
+          "kind": "index",
+          "relation": "customers",
+          "name": "customers_pkey",
+          "definition": "CREATE UNIQUE INDEX customers_pkey ON public.customers USING btree (id)"
+        }
+      ],
+      "compatibility": [
+        {
+          "name": "Existing customer lookup",
+          "passed": true,
+          "expectedSqlState": null,
+          "execution": {
+            "label": "Existing customer lookup",
+            "sql": "SELECT display_name FROM customers WHERE id = 1",
+            "status": "ok",
+            "elapsedMs": 0.42311700000027486,
+            "commands": [
+              {
+                "command": "SELECT",
+                "rowCount": 1
+              }
+            ],
+            "sqlState": null,
+            "detail": null
+          },
+          "rows": [
+            {
+              "display_name": "Demo Alpha"
+            }
+          ]
+        },
+        {
+          "name": "New customer lookup",
+          "passed": true,
+          "expectedSqlState": null,
+          "execution": {
+            "label": "New customer lookup",
+            "sql": "SELECT full_name FROM customers WHERE id = 1",
+            "status": "ok",
+            "elapsedMs": 0.36409400000047754,
+            "commands": [
+              {
+                "command": "SELECT",
+                "rowCount": 1
+              }
+            ],
+            "sqlState": null,
+            "detail": null
+          },
+          "rows": [
+            {
+              "full_name": "Demo Alpha"
+            }
+          ]
+        },
+        {
+          "name": "Existing write propagates to new readers",
+          "passed": true,
+          "expectedSqlState": null,
+          "execution": {
+            "label": "Existing write propagates to new readers",
+            "sql": "UPDATE customers SET display_name = 'Demo Updated' WHERE id = 2 RETURNING full_name",
+            "status": "ok",
+            "elapsedMs": 0.415076000001136,
+            "commands": [
+              {
+                "command": "UPDATE",
+                "rowCount": 1
+              }
+            ],
+            "sqlState": null,
+            "detail": null
+          },
+          "rows": [
+            {
+              "full_name": "Demo Updated"
+            }
+          ]
+        }
+      ],
+      "integrity": [
+        {
+          "name": "Fixture row count",
+          "passed": true,
+          "expectedSqlState": null,
+          "execution": {
+            "label": "Fixture row count",
+            "sql": "SELECT count(*)::int AS total FROM customers",
+            "status": "ok",
+            "elapsedMs": 0.3759220000010828,
+            "commands": [
+              {
+                "command": "SELECT",
+                "rowCount": 1
+              }
+            ],
+            "sqlState": null,
+            "detail": null
+          },
+          "rows": [
+            {
+              "total": 2
+            }
+          ]
+        }
+      ],
+      "plan": null
+    }
+  },
+  "confirmedFailures": [
+    {
+      "code": "COMPATIBILITY_FAILURE",
+      "evidence": "Existing customer lookup",
+      "sqlState": "42703"
+    }
+  ],
+  "verification": {
+    "passed": true,
+    "expectation": "The rename breaks the legacy query with 42703. The generated alias preserves legacy reads and writes and supports new reads."
+  },
+  "review": {
+    "required": true,
+    "status": "pending",
+    "reason": "Require explicit human review of the proposal, evidence and rollout plan before merge or deploy."
+  },
+  "followUp": [
+    "Inventory production consumers before changing the write contract.",
+    "Move writers deliberately before retiring the old column."
+  ]
+}

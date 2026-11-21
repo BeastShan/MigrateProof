@@ -1,0 +1,301 @@
+{
+  "version": 1,
+  "id": "bcac4a24-00d9-4657-9470-ebd0fc88692e",
+  "scenario": {
+    "id": "irreversible-drop",
+    "title": "Irreversible column drop",
+    "description": "Drop a populated legacy column and inspect the missing data.",
+    "correctionAvailable": false,
+    "analysis": {
+      "statementCount": 1,
+      "risks": [
+        {
+          "code": "DROP_COLUMN",
+          "category": "structural-risk",
+          "severity": "critical",
+          "statement": 1,
+          "explanation": "Dropping a populated column removes its stored values."
+        },
+        {
+          "code": "QUERY_COMPATIBILITY",
+          "category": "potential-risk",
+          "severity": "high",
+          "statement": 1,
+          "explanation": "Existing application queries may reference the removed column."
+        },
+        {
+          "code": "ROLLBACK_REVIEW",
+          "category": "potential-risk",
+          "severity": "high",
+          "statement": 1,
+          "explanation": "Confirm a recovery path that preserves affected data."
+        },
+        {
+          "code": "LOCKING",
+          "category": "potential-risk",
+          "severity": "medium",
+          "statement": 1,
+          "explanation": "Confirm required locks and set bounded lock and statement timeouts."
+        }
+      ],
+      "unverifiedAssumptions": [
+        "Production workload, data distribution, size, and concurrent sessions remain unverified.",
+        "Application behavior and automated rollback require execution evidence and human review.",
+        "A clean static analysis result provides no production safety guarantee."
+      ]
+    }
+  },
+  "startedAt": "2026-11-21T11:10:50.803Z",
+  "completedAt": "2026-11-21T11:10:58.812Z",
+  "dataClassification": "synthetic-demo",
+  "postgresVersion": "17.12 (Debian 17.12-1.pgdg12+1)",
+  "postgresImage": "postgres:17-bookworm@sha256:837bed18782820fe967067cb5328b02b0d9992c1be9a37ee0c9c492cfc03af3b",
+  "source": {
+    "schemaSql": "CREATE TABLE notes (id integer PRIMARY KEY, legacy_text text NOT NULL);\n",
+    "seedSql": "INSERT INTO notes VALUES (1, 'Synthetic note A'), (2, 'Synthetic note B');\n",
+    "baselineSha256": "917ed2b77388a965d2b901a30412958b6d6f5af0e560c2487a7763b5d7a51b3f",
+    "proposedSha256": "d88b7e2a5d44e73573b86d3e1eaf864c01c24ec5b4e0fa8eb68dd6eef7019e53",
+    "correctionSha256": null
+  },
+  "proposed": {
+    "setup": [
+      {
+        "label": "Create baseline schema",
+        "sql": "CREATE TABLE notes (id integer PRIMARY KEY, legacy_text text NOT NULL);\n",
+        "status": "ok",
+        "elapsedMs": 1.9312250000002678,
+        "commands": [
+          {
+            "command": "CREATE",
+            "rowCount": null
+          }
+        ],
+        "sqlState": null,
+        "detail": null
+      },
+      {
+        "label": "Seed deterministic synthetic records",
+        "sql": "INSERT INTO notes VALUES (1, 'Synthetic note A'), (2, 'Synthetic note B');\n",
+        "status": "ok",
+        "elapsedMs": 0.3326690000030794,
+        "commands": [
+          {
+            "command": "INSERT",
+            "rowCount": 2
+          }
+        ],
+        "sqlState": null,
+        "detail": null
+      }
+    ],
+    "baseline": {
+      "schema": [
+        {
+          "kind": "column",
+          "relation": "notes",
+          "name": "id",
+          "definition": "integer",
+          "nullable": false,
+          "generated": null
+        },
+        {
+          "kind": "column",
+          "relation": "notes",
+          "name": "legacy_text",
+          "definition": "text",
+          "nullable": false,
+          "generated": null
+        },
+        {
+          "kind": "constraint",
+          "relation": "notes",
+          "name": "notes_pkey",
+          "definition": "PRIMARY KEY (id)"
+        },
+        {
+          "kind": "index",
+          "relation": "notes",
+          "name": "notes_pkey",
+          "definition": "CREATE UNIQUE INDEX notes_pkey ON public.notes USING btree (id)"
+        }
+      ],
+      "compatibility": [],
+      "integrity": [
+        {
+          "name": "Fixture row count",
+          "passed": true,
+          "expectedSqlState": null,
+          "execution": {
+            "label": "Fixture row count",
+            "sql": "SELECT count(*)::int AS total FROM notes",
+            "status": "ok",
+            "elapsedMs": 0.3760569999940344,
+            "commands": [
+              {
+                "command": "SELECT",
+                "rowCount": 1
+              }
+            ],
+            "sqlState": null,
+            "detail": null
+          },
+          "rows": [
+            {
+              "total": 2
+            }
+          ]
+        },
+        {
+          "name": "Populated legacy values",
+          "passed": true,
+          "expectedSqlState": null,
+          "execution": {
+            "label": "Populated legacy values",
+            "sql": "SELECT count(*)::int AS total FROM notes WHERE legacy_text IS NOT NULL",
+            "status": "ok",
+            "elapsedMs": 0.6216100000019651,
+            "commands": [
+              {
+                "command": "SELECT",
+                "rowCount": 1
+              }
+            ],
+            "sqlState": null,
+            "detail": null
+          },
+          "rows": [
+            {
+              "total": 2
+            }
+          ]
+        }
+      ],
+      "plan": null
+    },
+    "migration": {
+      "label": "Apply proposed migration",
+      "sql": "ALTER TABLE notes DROP COLUMN legacy_text;\n",
+      "status": "ok",
+      "elapsedMs": 0.3149570000023232,
+      "commands": [
+        {
+          "command": "ALTER",
+          "rowCount": null
+        }
+      ],
+      "sqlState": null,
+      "detail": null
+    },
+    "disposition": "committed",
+    "diagnostics": [
+      {
+        "name": "Transaction committed",
+        "passed": true,
+        "expectedSqlState": null,
+        "execution": {
+          "label": "Close migration transaction",
+          "sql": "COMMIT",
+          "status": "ok",
+          "elapsedMs": 0.30976299999747425,
+          "commands": [
+            {
+              "command": "COMMIT",
+              "rowCount": null
+            }
+          ],
+          "sqlState": null,
+          "detail": null
+        },
+        "rows": []
+      }
+    ],
+    "after": {
+      "schema": [
+        {
+          "kind": "column",
+          "relation": "notes",
+          "name": "id",
+          "definition": "integer",
+          "nullable": false,
+          "generated": null
+        },
+        {
+          "kind": "constraint",
+          "relation": "notes",
+          "name": "notes_pkey",
+          "definition": "PRIMARY KEY (id)"
+        },
+        {
+          "kind": "index",
+          "relation": "notes",
+          "name": "notes_pkey",
+          "definition": "CREATE UNIQUE INDEX notes_pkey ON public.notes USING btree (id)"
+        }
+      ],
+      "compatibility": [],
+      "integrity": [
+        {
+          "name": "Fixture row count",
+          "passed": true,
+          "expectedSqlState": null,
+          "execution": {
+            "label": "Fixture row count",
+            "sql": "SELECT count(*)::int AS total FROM notes",
+            "status": "ok",
+            "elapsedMs": 0.18231399999785936,
+            "commands": [
+              {
+                "command": "SELECT",
+                "rowCount": 1
+              }
+            ],
+            "sqlState": null,
+            "detail": null
+          },
+          "rows": [
+            {
+              "total": 2
+            }
+          ]
+        },
+        {
+          "name": "Populated legacy values",
+          "passed": false,
+          "expectedSqlState": null,
+          "execution": {
+            "label": "Populated legacy values",
+            "sql": "SELECT count(*)::int AS total FROM notes WHERE legacy_text IS NOT NULL",
+            "status": "error",
+            "elapsedMs": 0.2426800000030198,
+            "commands": [],
+            "sqlState": "42703",
+            "detail": "The query references a column that does not exist."
+          },
+          "rows": []
+        }
+      ],
+      "plan": null
+    }
+  },
+  "correction": null,
+  "confirmedFailures": [
+    {
+      "code": "INTEGRITY_FAILURE",
+      "evidence": "Populated legacy values",
+      "sqlState": "42703"
+    }
+  ],
+  "verification": {
+    "passed": true,
+    "expectation": "The DDL commits, the remaining row count is preserved, and the legacy payload becomes inaccessible with 42703."
+  },
+  "review": {
+    "required": true,
+    "status": "pending",
+    "reason": "Recreating the column cannot recover the committed deletion of its values. Require explicit human approval and evidence of recoverability."
+  },
+  "followUp": [
+    "Inventory consumers and confirm a retention policy.",
+    "Prove recovery from a tested archive or backup before any real drop."
+  ]
+}

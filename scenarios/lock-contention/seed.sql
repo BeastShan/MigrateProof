@@ -1,0 +1,1 @@
+INSERT INTO invoices VALUES (1, 1250), (2, 2500);

@@ -1,0 +1,877 @@
+{
+  "version": 1,
+  "id": "a88aaa77-b78d-4640-a719-67ca0ca42f37",
+  "scenario": {
+    "id": "performance",
+    "title": "Query performance regression",
+    "description": "Remove an index used by a selective lookup on 75,000 synthetic rows.",
+    "correctionAvailable": true,
+    "analysis": {
+      "statementCount": 1,
+      "risks": [
+        {
+          "code": "INDEX_DROP",
+          "category": "structural-risk",
+          "severity": "high",
+          "statement": 1,
+          "explanation": "Removing an index may change query plans or write behavior."
+        },
+        {
+          "code": "LOCKING",
+          "category": "potential-risk",
+          "severity": "medium",
+          "statement": 1,
+          "explanation": "Confirm required locks and set bounded lock and statement timeouts."
+        }
+      ],
+      "unverifiedAssumptions": [
+        "Production workload, data distribution, size, and concurrent sessions remain unverified.",
+        "Application behavior and automated rollback require execution evidence and human review.",
+        "A clean static analysis result provides no production safety guarantee."
+      ]
+    }
+  },
+  "startedAt": "2026-11-21T11:10:31.942Z",
+  "completedAt": "2026-11-21T11:10:42.088Z",
+  "dataClassification": "synthetic-demo",
+  "postgresVersion": "17.12 (Debian 17.12-1.pgdg12+1)",
+  "postgresImage": "postgres:17-bookworm@sha256:837bed18782820fe967067cb5328b02b0d9992c1be9a37ee0c9c492cfc03af3b",
+  "source": {
+    "schemaSql": "CREATE TABLE events (id integer PRIMARY KEY, customer_id integer NOT NULL, payload text NOT NULL);\nCREATE INDEX events_customer_idx ON events (customer_id);\n",
+    "seedSql": "INSERT INTO events\nSELECT i, i, repeat('synthetic-', 15) FROM generate_series(1, 75000) AS i;\nANALYZE events;\n",
+    "baselineSha256": "b87554cb9bd662d1dadc2d68f4a127124f3522110fda076d1044f979b8b65347",
+    "proposedSha256": "97026980fe531207bd9c174096280635b1c57b145f7c2bd04918ee9983774b54",
+    "correctionSha256": "1b4417f2083e2ed93604286794b95da864b7aa17c5d48d33a4df1949f1286278"
+  },
+  "proposed": {
+    "setup": [
+      {
+        "label": "Create baseline schema",
+        "sql": "CREATE TABLE events (id integer PRIMARY KEY, customer_id integer NOT NULL, payload text NOT NULL);\nCREATE INDEX events_customer_idx ON events (customer_id);\n",
+        "status": "ok",
+        "elapsedMs": 3.1396890000032727,
+        "commands": [
+          {
+            "command": "CREATE",
+            "rowCount": null
+          },
+          {
+            "command": "CREATE",
+            "rowCount": null
+          }
+        ],
+        "sqlState": null,
+        "detail": null
+      },
+      {
+        "label": "Seed deterministic synthetic records",
+        "sql": "INSERT INTO events\nSELECT i, i, repeat('synthetic-', 15) FROM generate_series(1, 75000) AS i;\nANALYZE events;\n",
+        "status": "ok",
+        "elapsedMs": 442.52809100000013,
+        "commands": [
+          {
+            "command": "INSERT",
+            "rowCount": 75000
+          },
+          {
+            "command": "ANALYZE",
+            "rowCount": null
+          }
+        ],
+        "sqlState": null,
+        "detail": null
+      }
+    ],
+    "baseline": {
+      "schema": [
+        {
+          "kind": "column",
+          "relation": "events",
+          "name": "id",
+          "definition": "integer",
+          "nullable": false,
+          "generated": null
+        },
+        {
+          "kind": "column",
+          "relation": "events",
+          "name": "customer_id",
+          "definition": "integer",
+          "nullable": false,
+          "generated": null
+        },
+        {
+          "kind": "column",
+          "relation": "events",
+          "name": "payload",
+          "definition": "text",
+          "nullable": false,
+          "generated": null
+        },
+        {
+          "kind": "constraint",
+          "relation": "events",
+          "name": "events_pkey",
+          "definition": "PRIMARY KEY (id)"
+        },
+        {
+          "kind": "index",
+          "relation": "events",
+          "name": "events_customer_idx",
+          "definition": "CREATE INDEX events_customer_idx ON public.events USING btree (customer_id)"
+        },
+        {
+          "kind": "index",
+          "relation": "events",
+          "name": "events_pkey",
+          "definition": "CREATE UNIQUE INDEX events_pkey ON public.events USING btree (id)"
+        }
+      ],
+      "compatibility": [
+        {
+          "name": "Existing event lookup",
+          "passed": true,
+          "expectedSqlState": null,
+          "execution": {
+            "label": "Existing event lookup",
+            "sql": "SELECT id FROM events WHERE customer_id = 42424",
+            "status": "ok",
+            "elapsedMs": 0.6009139999951003,
+            "commands": [
+              {
+                "command": "SELECT",
+                "rowCount": 1
+              }
+            ],
+            "sqlState": null,
+            "detail": null
+          },
+          "rows": [
+            {
+              "id": 42424
+            }
+          ]
+        }
+      ],
+      "integrity": [
+        {
+          "name": "Fixture row count",
+          "passed": true,
+          "expectedSqlState": null,
+          "execution": {
+            "label": "Fixture row count",
+            "sql": "SELECT count(*)::int AS total FROM events",
+            "status": "ok",
+            "elapsedMs": 10.047673000000941,
+            "commands": [
+              {
+                "command": "SELECT",
+                "rowCount": 1
+              }
+            ],
+            "sqlState": null,
+            "detail": null
+          },
+          "rows": [
+            {
+              "total": 75000
+            }
+          ]
+        }
+      ],
+      "plan": {
+        "execution": {
+          "label": "Measure lookup plan",
+          "sql": "EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON) SELECT id FROM events WHERE customer_id = 42424",
+          "status": "ok",
+          "elapsedMs": 0.7206099999966682,
+          "commands": [
+            {
+              "command": "EXPLAIN",
+              "rowCount": null
+            }
+          ],
+          "sqlState": null,
+          "detail": null
+        },
+        "evidence": [
+          {
+            "Plan": {
+              "Node Type": "Index Scan",
+              "Parallel Aware": false,
+              "Async Capable": false,
+              "Scan Direction": "Forward",
+              "Index Name": "events_customer_idx",
+              "Relation Name": "events",
+              "Alias": "events",
+              "Startup Cost": 0.29,
+              "Total Cost": 8.31,
+              "Plan Rows": 1,
+              "Plan Width": 4,
+              "Actual Startup Time": 0.007,
+              "Actual Total Time": 0.008,
+              "Actual Rows": 1,
+              "Actual Loops": 1,
+              "Index Cond": "(customer_id = 42424)",
+              "Rows Removed by Index Recheck": 0,
+              "Shared Hit Blocks": 3,
+              "Shared Read Blocks": 0,
+              "Shared Dirtied Blocks": 0,
+              "Shared Written Blocks": 0,
+              "Local Hit Blocks": 0,
+              "Local Read Blocks": 0,
+              "Local Dirtied Blocks": 0,
+              "Local Written Blocks": 0,
+              "Temp Read Blocks": 0,
+              "Temp Written Blocks": 0
+            },
+            "Planning": {
+              "Shared Hit Blocks": 0,
+              "Shared Read Blocks": 0,
+              "Shared Dirtied Blocks": 0,
+              "Shared Written Blocks": 0,
+              "Local Hit Blocks": 0,
+              "Local Read Blocks": 0,
+              "Local Dirtied Blocks": 0,
+              "Local Written Blocks": 0,
+              "Temp Read Blocks": 0,
+              "Temp Written Blocks": 0
+            },
+            "Planning Time": 0.032,
+            "Triggers": [],
+            "Execution Time": 0.017
+          }
+        ],
+        "rootNode": "Index Scan",
+        "sharedBlocks": 3,
+        "executionMs": 0.017
+      }
+    },
+    "migration": {
+      "label": "Apply proposed migration",
+      "sql": "DROP INDEX events_customer_idx;\n",
+      "status": "ok",
+      "elapsedMs": 0.4083240000036312,
+      "commands": [
+        {
+          "command": "DROP",
+          "rowCount": null
+        }
+      ],
+      "sqlState": null,
+      "detail": null
+    },
+    "disposition": "committed",
+    "diagnostics": [
+      {
+        "name": "Transaction committed",
+        "passed": true,
+        "expectedSqlState": null,
+        "execution": {
+          "label": "Close migration transaction",
+          "sql": "COMMIT",
+          "status": "ok",
+          "elapsedMs": 0.7845289999968372,
+          "commands": [
+            {
+              "command": "COMMIT",
+              "rowCount": null
+            }
+          ],
+          "sqlState": null,
+          "detail": null
+        },
+        "rows": []
+      }
+    ],
+    "after": {
+      "schema": [
+        {
+          "kind": "column",
+          "relation": "events",
+          "name": "id",
+          "definition": "integer",
+          "nullable": false,
+          "generated": null
+        },
+        {
+          "kind": "column",
+          "relation": "events",
+          "name": "customer_id",
+          "definition": "integer",
+          "nullable": false,
+          "generated": null
+        },
+        {
+          "kind": "column",
+          "relation": "events",
+          "name": "payload",
+          "definition": "text",
+          "nullable": false,
+          "generated": null
+        },
+        {
+          "kind": "constraint",
+          "relation": "events",
+          "name": "events_pkey",
+          "definition": "PRIMARY KEY (id)"
+        },
+        {
+          "kind": "index",
+          "relation": "events",
+          "name": "events_pkey",
+          "definition": "CREATE UNIQUE INDEX events_pkey ON public.events USING btree (id)"
+        }
+      ],
+      "compatibility": [
+        {
+          "name": "Existing event lookup",
+          "passed": true,
+          "expectedSqlState": null,
+          "execution": {
+            "label": "Existing event lookup",
+            "sql": "SELECT id FROM events WHERE customer_id = 42424",
+            "status": "ok",
+            "elapsedMs": 11.623250000004191,
+            "commands": [
+              {
+                "command": "SELECT",
+                "rowCount": 1
+              }
+            ],
+            "sqlState": null,
+            "detail": null
+          },
+          "rows": [
+            {
+              "id": 42424
+            }
+          ]
+        }
+      ],
+      "integrity": [
+        {
+          "name": "Fixture row count",
+          "passed": true,
+          "expectedSqlState": null,
+          "execution": {
+            "label": "Fixture row count",
+            "sql": "SELECT count(*)::int AS total FROM events",
+            "status": "ok",
+            "elapsedMs": 10.210655000002589,
+            "commands": [
+              {
+                "command": "SELECT",
+                "rowCount": 1
+              }
+            ],
+            "sqlState": null,
+            "detail": null
+          },
+          "rows": [
+            {
+              "total": 75000
+            }
+          ]
+        }
+      ],
+      "plan": {
+        "execution": {
+          "label": "Measure lookup plan",
+          "sql": "EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON) SELECT id FROM events WHERE customer_id = 42424",
+          "status": "ok",
+          "elapsedMs": 5.610808999997971,
+          "commands": [
+            {
+              "command": "EXPLAIN",
+              "rowCount": null
+            }
+          ],
+          "sqlState": null,
+          "detail": null
+        },
+        "evidence": [
+          {
+            "Plan": {
+              "Node Type": "Seq Scan",
+              "Parallel Aware": false,
+              "Async Capable": false,
+              "Relation Name": "events",
+              "Alias": "events",
+              "Startup Cost": 0,
+              "Total Cost": 2767.5,
+              "Plan Rows": 1,
+              "Plan Width": 4,
+              "Actual Startup Time": 2.968,
+              "Actual Total Time": 5.128,
+              "Actual Rows": 1,
+              "Actual Loops": 1,
+              "Filter": "(customer_id = 42424)",
+              "Rows Removed by Filter": 74999,
+              "Shared Hit Blocks": 1830,
+              "Shared Read Blocks": 0,
+              "Shared Dirtied Blocks": 0,
+              "Shared Written Blocks": 0,
+              "Local Hit Blocks": 0,
+              "Local Read Blocks": 0,
+              "Local Dirtied Blocks": 0,
+              "Local Written Blocks": 0,
+              "Temp Read Blocks": 0,
+              "Temp Written Blocks": 0
+            },
+            "Planning": {
+              "Shared Hit Blocks": 0,
+              "Shared Read Blocks": 0,
+              "Shared Dirtied Blocks": 0,
+              "Shared Written Blocks": 0,
+              "Local Hit Blocks": 0,
+              "Local Read Blocks": 0,
+              "Local Dirtied Blocks": 0,
+              "Local Written Blocks": 0,
+              "Temp Read Blocks": 0,
+              "Temp Written Blocks": 0
+            },
+            "Planning Time": 0.026,
+            "Triggers": [],
+            "Execution Time": 5.138
+          }
+        ],
+        "rootNode": "Seq Scan",
+        "sharedBlocks": 1830,
+        "executionMs": 5.138
+      }
+    }
+  },
+  "correction": {
+    "setup": [
+      {
+        "label": "Create baseline schema",
+        "sql": "CREATE TABLE events (id integer PRIMARY KEY, customer_id integer NOT NULL, payload text NOT NULL);\nCREATE INDEX events_customer_idx ON events (customer_id);\n",
+        "status": "ok",
+        "elapsedMs": 6.01999899999646,
+        "commands": [
+          {
+            "command": "CREATE",
+            "rowCount": null
+          },
+          {
+            "command": "CREATE",
+            "rowCount": null
+          }
+        ],
+        "sqlState": null,
+        "detail": null
+      },
+      {
+        "label": "Seed deterministic synthetic records",
+        "sql": "INSERT INTO events\nSELECT i, i, repeat('synthetic-', 15) FROM generate_series(1, 75000) AS i;\nANALYZE events;\n",
+        "status": "ok",
+        "elapsedMs": 497.5112020000015,
+        "commands": [
+          {
+            "command": "INSERT",
+            "rowCount": 75000
+          },
+          {
+            "command": "ANALYZE",
+            "rowCount": null
+          }
+        ],
+        "sqlState": null,
+        "detail": null
+      }
+    ],
+    "baseline": {
+      "schema": [
+        {
+          "kind": "column",
+          "relation": "events",
+          "name": "id",
+          "definition": "integer",
+          "nullable": false,
+          "generated": null
+        },
+        {
+          "kind": "column",
+          "relation": "events",
+          "name": "customer_id",
+          "definition": "integer",
+          "nullable": false,
+          "generated": null
+        },
+        {
+          "kind": "column",
+          "relation": "events",
+          "name": "payload",
+          "definition": "text",
+          "nullable": false,
+          "generated": null
+        },
+        {
+          "kind": "constraint",
+          "relation": "events",
+          "name": "events_pkey",
+          "definition": "PRIMARY KEY (id)"
+        },
+        {
+          "kind": "index",
+          "relation": "events",
+          "name": "events_customer_idx",
+          "definition": "CREATE INDEX events_customer_idx ON public.events USING btree (customer_id)"
+        },
+        {
+          "kind": "index",
+          "relation": "events",
+          "name": "events_pkey",
+          "definition": "CREATE UNIQUE INDEX events_pkey ON public.events USING btree (id)"
+        }
+      ],
+      "compatibility": [
+        {
+          "name": "Existing event lookup",
+          "passed": true,
+          "expectedSqlState": null,
+          "execution": {
+            "label": "Existing event lookup",
+            "sql": "SELECT id FROM events WHERE customer_id = 42424",
+            "status": "ok",
+            "elapsedMs": 1.2613819999969564,
+            "commands": [
+              {
+                "command": "SELECT",
+                "rowCount": 1
+              }
+            ],
+            "sqlState": null,
+            "detail": null
+          },
+          "rows": [
+            {
+              "id": 42424
+            }
+          ]
+        }
+      ],
+      "integrity": [
+        {
+          "name": "Fixture row count",
+          "passed": true,
+          "expectedSqlState": null,
+          "execution": {
+            "label": "Fixture row count",
+            "sql": "SELECT count(*)::int AS total FROM events",
+            "status": "ok",
+            "elapsedMs": 13.769282000001112,
+            "commands": [
+              {
+                "command": "SELECT",
+                "rowCount": 1
+              }
+            ],
+            "sqlState": null,
+            "detail": null
+          },
+          "rows": [
+            {
+              "total": 75000
+            }
+          ]
+        }
+      ],
+      "plan": {
+        "execution": {
+          "label": "Measure lookup plan",
+          "sql": "EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON) SELECT id FROM events WHERE customer_id = 42424",
+          "status": "ok",
+          "elapsedMs": 0.5859740000014426,
+          "commands": [
+            {
+              "command": "EXPLAIN",
+              "rowCount": null
+            }
+          ],
+          "sqlState": null,
+          "detail": null
+        },
+        "evidence": [
+          {
+            "Plan": {
+              "Node Type": "Index Scan",
+              "Parallel Aware": false,
+              "Async Capable": false,
+              "Scan Direction": "Forward",
+              "Index Name": "events_customer_idx",
+              "Relation Name": "events",
+              "Alias": "events",
+              "Startup Cost": 0.29,
+              "Total Cost": 8.31,
+              "Plan Rows": 1,
+              "Plan Width": 4,
+              "Actual Startup Time": 0.008,
+              "Actual Total Time": 0.008,
+              "Actual Rows": 1,
+              "Actual Loops": 1,
+              "Index Cond": "(customer_id = 42424)",
+              "Rows Removed by Index Recheck": 0,
+              "Shared Hit Blocks": 3,
+              "Shared Read Blocks": 0,
+              "Shared Dirtied Blocks": 0,
+              "Shared Written Blocks": 0,
+              "Local Hit Blocks": 0,
+              "Local Read Blocks": 0,
+              "Local Dirtied Blocks": 0,
+              "Local Written Blocks": 0,
+              "Temp Read Blocks": 0,
+              "Temp Written Blocks": 0
+            },
+            "Planning": {
+              "Shared Hit Blocks": 0,
+              "Shared Read Blocks": 0,
+              "Shared Dirtied Blocks": 0,
+              "Shared Written Blocks": 0,
+              "Local Hit Blocks": 0,
+              "Local Read Blocks": 0,
+              "Local Dirtied Blocks": 0,
+              "Local Written Blocks": 0,
+              "Temp Read Blocks": 0,
+              "Temp Written Blocks": 0
+            },
+            "Planning Time": 0.035,
+            "Triggers": [],
+            "Execution Time": 0.016
+          }
+        ],
+        "rootNode": "Index Scan",
+        "sharedBlocks": 3,
+        "executionMs": 0.016
+      }
+    },
+    "migration": {
+      "label": "Apply correction migration",
+      "sql": "CREATE INDEX events_customer_lookup_idx ON events (customer_id) INCLUDE (id);\nDROP INDEX events_customer_idx;\n",
+      "status": "ok",
+      "elapsedMs": 44.89421199999924,
+      "commands": [
+        {
+          "command": "CREATE",
+          "rowCount": null
+        },
+        {
+          "command": "DROP",
+          "rowCount": null
+        }
+      ],
+      "sqlState": null,
+      "detail": null
+    },
+    "disposition": "committed",
+    "diagnostics": [
+      {
+        "name": "Transaction committed",
+        "passed": true,
+        "expectedSqlState": null,
+        "execution": {
+          "label": "Close migration transaction",
+          "sql": "COMMIT",
+          "status": "ok",
+          "elapsedMs": 1.4339400000026217,
+          "commands": [
+            {
+              "command": "COMMIT",
+              "rowCount": null
+            }
+          ],
+          "sqlState": null,
+          "detail": null
+        },
+        "rows": []
+      }
+    ],
+    "after": {
+      "schema": [
+        {
+          "kind": "column",
+          "relation": "events",
+          "name": "id",
+          "definition": "integer",
+          "nullable": false,
+          "generated": null
+        },
+        {
+          "kind": "column",
+          "relation": "events",
+          "name": "customer_id",
+          "definition": "integer",
+          "nullable": false,
+          "generated": null
+        },
+        {
+          "kind": "column",
+          "relation": "events",
+          "name": "payload",
+          "definition": "text",
+          "nullable": false,
+          "generated": null
+        },
+        {
+          "kind": "constraint",
+          "relation": "events",
+          "name": "events_pkey",
+          "definition": "PRIMARY KEY (id)"
+        },
+        {
+          "kind": "index",
+          "relation": "events",
+          "name": "events_customer_lookup_idx",
+          "definition": "CREATE INDEX events_customer_lookup_idx ON public.events USING btree (customer_id) INCLUDE (id)"
+        },
+        {
+          "kind": "index",
+          "relation": "events",
+          "name": "events_pkey",
+          "definition": "CREATE UNIQUE INDEX events_pkey ON public.events USING btree (id)"
+        }
+      ],
+      "compatibility": [
+        {
+          "name": "Existing event lookup",
+          "passed": true,
+          "expectedSqlState": null,
+          "execution": {
+            "label": "Existing event lookup",
+            "sql": "SELECT id FROM events WHERE customer_id = 42424",
+            "status": "ok",
+            "elapsedMs": 0.20518599999923026,
+            "commands": [
+              {
+                "command": "SELECT",
+                "rowCount": 1
+              }
+            ],
+            "sqlState": null,
+            "detail": null
+          },
+          "rows": [
+            {
+              "id": 42424
+            }
+          ]
+        }
+      ],
+      "integrity": [
+        {
+          "name": "Fixture row count",
+          "passed": true,
+          "expectedSqlState": null,
+          "execution": {
+            "label": "Fixture row count",
+            "sql": "SELECT count(*)::int AS total FROM events",
+            "status": "ok",
+            "elapsedMs": 7.053470999999263,
+            "commands": [
+              {
+                "command": "SELECT",
+                "rowCount": 1
+              }
+            ],
+            "sqlState": null,
+            "detail": null
+          },
+          "rows": [
+            {
+              "total": 75000
+            }
+          ]
+        }
+      ],
+      "plan": {
+        "execution": {
+          "label": "Measure lookup plan",
+          "sql": "EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON) SELECT id FROM events WHERE customer_id = 42424",
+          "status": "ok",
+          "elapsedMs": 0.40338899999915157,
+          "commands": [
+            {
+              "command": "EXPLAIN",
+              "rowCount": null
+            }
+          ],
+          "sqlState": null,
+          "detail": null
+        },
+        "evidence": [
+          {
+            "Plan": {
+              "Node Type": "Index Only Scan",
+              "Parallel Aware": false,
+              "Async Capable": false,
+              "Scan Direction": "Forward",
+              "Index Name": "events_customer_lookup_idx",
+              "Relation Name": "events",
+              "Alias": "events",
+              "Startup Cost": 0.29,
+              "Total Cost": 8.31,
+              "Plan Rows": 1,
+              "Plan Width": 4,
+              "Actual Startup Time": 0.029,
+              "Actual Total Time": 0.03,
+              "Actual Rows": 1,
+              "Actual Loops": 1,
+              "Index Cond": "(customer_id = 42424)",
+              "Rows Removed by Index Recheck": 0,
+              "Heap Fetches": 1,
+              "Shared Hit Blocks": 1,
+              "Shared Read Blocks": 2,
+              "Shared Dirtied Blocks": 0,
+              "Shared Written Blocks": 0,
+              "Local Hit Blocks": 0,
+              "Local Read Blocks": 0,
+              "Local Dirtied Blocks": 0,
+              "Local Written Blocks": 0,
+              "Temp Read Blocks": 0,
+              "Temp Written Blocks": 0
+            },
+            "Planning": {
+              "Shared Hit Blocks": 0,
+              "Shared Read Blocks": 0,
+              "Shared Dirtied Blocks": 0,
+              "Shared Written Blocks": 0,
+              "Local Hit Blocks": 0,
+              "Local Read Blocks": 0,
+              "Local Dirtied Blocks": 0,
+              "Local Written Blocks": 0,
+              "Temp Read Blocks": 0,
+              "Temp Written Blocks": 0
+            },
+            "Planning Time": 0.036,
+            "Triggers": [],
+            "Execution Time": 0.039
+          }
+        ],
+        "rootNode": "Index Only Scan",
+        "sharedBlocks": 3,
+        "executionMs": 0.039
+      }
+    }
+  },
+  "confirmedFailures": [
+    {
+      "code": "PLAN_REGRESSION",
+      "evidence": "Lookup changed from Index Scan (3 shared blocks) to Seq Scan (1830 shared blocks).",
+      "sqlState": null
+    }
+  ],
+  "verification": {
+    "passed": true,
+    "expectation": "The proposed change replaces the indexed plan with a sequential scan and increases shared blocks accessed. The replacement index restores indexed access."
+  },
+  "review": {
+    "required": true,
+    "status": "pending",
+    "reason": "Require explicit human review of the proposal, evidence and rollout plan before merge or deploy."
+  },
+  "followUp": [
+    "Repeat the lookup under representative distributions and concurrent load.",
+    "Review the replacement index’s build and write costs."
+  ]
+}

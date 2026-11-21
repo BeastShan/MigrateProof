@@ -1,0 +1,687 @@
+{
+  "version": 1,
+  "id": "b3ad0c7b-4c40-4b03-993c-0e898af43211",
+  "scenario": {
+    "id": "unique-conflict",
+    "title": "Unique constraint conflict",
+    "description": "Enforce unique aliases with duplicate rows in the baseline.",
+    "correctionAvailable": true,
+    "analysis": {
+      "statementCount": 1,
+      "risks": [
+        {
+          "code": "CONSTRAINT_CHANGE",
+          "category": "structural-risk",
+          "severity": "medium",
+          "statement": 1,
+          "explanation": "Check existing rows and verify writes under the new constraint."
+        },
+        {
+          "code": "LOCKING",
+          "category": "potential-risk",
+          "severity": "medium",
+          "statement": 1,
+          "explanation": "Confirm required locks and set bounded lock and statement timeouts."
+        }
+      ],
+      "unverifiedAssumptions": [
+        "Production workload, data distribution, size, and concurrent sessions remain unverified.",
+        "Application behavior and automated rollback require execution evidence and human review.",
+        "A clean static analysis result provides no production safety guarantee."
+      ]
+    }
+  },
+  "startedAt": "2026-11-21T11:10:23.838Z",
+  "completedAt": "2026-11-21T11:10:31.936Z",
+  "dataClassification": "synthetic-demo",
+  "postgresVersion": "17.12 (Debian 17.12-1.pgdg12+1)",
+  "postgresImage": "postgres:17-bookworm@sha256:837bed18782820fe967067cb5328b02b0d9992c1be9a37ee0c9c492cfc03af3b",
+  "source": {
+    "schemaSql": "CREATE TABLE aliases (id integer PRIMARY KEY, alias text NOT NULL);\n",
+    "seedSql": "INSERT INTO aliases VALUES (1, 'alpha'), (2, 'alpha'), (3, 'beta');\n",
+    "baselineSha256": "037d00725f1e2c4864df6675733ee6998d0c1916bae2bbca00f013446df22068",
+    "proposedSha256": "d68564b422ea88e68caf4ca288af4a8b9f946a25a7c6856a021dc9029235d187",
+    "correctionSha256": "e5e792c06f33a74b57e0cf5719f15eed85aa92ce4678bf05de6848c292214f1a"
+  },
+  "proposed": {
+    "setup": [
+      {
+        "label": "Create baseline schema",
+        "sql": "CREATE TABLE aliases (id integer PRIMARY KEY, alias text NOT NULL);\n",
+        "status": "ok",
+        "elapsedMs": 2.0306469999995898,
+        "commands": [
+          {
+            "command": "CREATE",
+            "rowCount": null
+          }
+        ],
+        "sqlState": null,
+        "detail": null
+      },
+      {
+        "label": "Seed deterministic synthetic records",
+        "sql": "INSERT INTO aliases VALUES (1, 'alpha'), (2, 'alpha'), (3, 'beta');\n",
+        "status": "ok",
+        "elapsedMs": 0.6612369999966177,
+        "commands": [
+          {
+            "command": "INSERT",
+            "rowCount": 3
+          }
+        ],
+        "sqlState": null,
+        "detail": null
+      }
+    ],
+    "baseline": {
+      "schema": [
+        {
+          "kind": "column",
+          "relation": "aliases",
+          "name": "id",
+          "definition": "integer",
+          "nullable": false,
+          "generated": null
+        },
+        {
+          "kind": "column",
+          "relation": "aliases",
+          "name": "alias",
+          "definition": "text",
+          "nullable": false,
+          "generated": null
+        },
+        {
+          "kind": "constraint",
+          "relation": "aliases",
+          "name": "aliases_pkey",
+          "definition": "PRIMARY KEY (id)"
+        },
+        {
+          "kind": "index",
+          "relation": "aliases",
+          "name": "aliases_pkey",
+          "definition": "CREATE UNIQUE INDEX aliases_pkey ON public.aliases USING btree (id)"
+        }
+      ],
+      "compatibility": [
+        {
+          "name": "Existing alias lookup",
+          "passed": true,
+          "expectedSqlState": null,
+          "execution": {
+            "label": "Existing alias lookup",
+            "sql": "SELECT alias FROM aliases WHERE id = 1",
+            "status": "ok",
+            "elapsedMs": 0.38900199999989127,
+            "commands": [
+              {
+                "command": "SELECT",
+                "rowCount": 1
+              }
+            ],
+            "sqlState": null,
+            "detail": null
+          },
+          "rows": [
+            {
+              "alias": "alpha"
+            }
+          ]
+        }
+      ],
+      "integrity": [
+        {
+          "name": "Fixture row count",
+          "passed": true,
+          "expectedSqlState": null,
+          "execution": {
+            "label": "Fixture row count",
+            "sql": "SELECT count(*)::int AS total FROM aliases",
+            "status": "ok",
+            "elapsedMs": 0.6447829999997339,
+            "commands": [
+              {
+                "command": "SELECT",
+                "rowCount": 1
+              }
+            ],
+            "sqlState": null,
+            "detail": null
+          },
+          "rows": [
+            {
+              "total": 3
+            }
+          ]
+        },
+        {
+          "name": "Duplicate aliases and affected IDs",
+          "passed": true,
+          "expectedSqlState": null,
+          "execution": {
+            "label": "Duplicate aliases and affected IDs",
+            "sql": "SELECT alias, array_agg(id ORDER BY id) AS ids FROM aliases GROUP BY alias HAVING count(*) > 1 ORDER BY alias",
+            "status": "ok",
+            "elapsedMs": 1.2332099999985076,
+            "commands": [
+              {
+                "command": "SELECT",
+                "rowCount": 1
+              }
+            ],
+            "sqlState": null,
+            "detail": null
+          },
+          "rows": [
+            {
+              "alias": "alpha",
+              "ids": [
+                1,
+                2
+              ]
+            }
+          ]
+        }
+      ],
+      "plan": null
+    },
+    "migration": {
+      "label": "Apply proposed migration",
+      "sql": "ALTER TABLE aliases ADD CONSTRAINT aliases_alias_key UNIQUE (alias);\n",
+      "status": "error",
+      "elapsedMs": 0.8567030000012892,
+      "commands": [],
+      "sqlState": "23505",
+      "detail": "Existing data violates a unique constraint."
+    },
+    "disposition": "rolled-back",
+    "diagnostics": [
+      {
+        "name": "Transaction rolled back",
+        "passed": true,
+        "expectedSqlState": null,
+        "execution": {
+          "label": "Close migration transaction",
+          "sql": "ROLLBACK",
+          "status": "ok",
+          "elapsedMs": 0.552058000001125,
+          "commands": [
+            {
+              "command": "ROLLBACK",
+              "rowCount": null
+            }
+          ],
+          "sqlState": null,
+          "detail": null
+        },
+        "rows": []
+      }
+    ],
+    "after": {
+      "schema": [
+        {
+          "kind": "column",
+          "relation": "aliases",
+          "name": "id",
+          "definition": "integer",
+          "nullable": false,
+          "generated": null
+        },
+        {
+          "kind": "column",
+          "relation": "aliases",
+          "name": "alias",
+          "definition": "text",
+          "nullable": false,
+          "generated": null
+        },
+        {
+          "kind": "constraint",
+          "relation": "aliases",
+          "name": "aliases_pkey",
+          "definition": "PRIMARY KEY (id)"
+        },
+        {
+          "kind": "index",
+          "relation": "aliases",
+          "name": "aliases_pkey",
+          "definition": "CREATE UNIQUE INDEX aliases_pkey ON public.aliases USING btree (id)"
+        }
+      ],
+      "compatibility": [
+        {
+          "name": "Existing alias lookup",
+          "passed": true,
+          "expectedSqlState": null,
+          "execution": {
+            "label": "Existing alias lookup",
+            "sql": "SELECT alias FROM aliases WHERE id = 1",
+            "status": "ok",
+            "elapsedMs": 0.3431669999990845,
+            "commands": [
+              {
+                "command": "SELECT",
+                "rowCount": 1
+              }
+            ],
+            "sqlState": null,
+            "detail": null
+          },
+          "rows": [
+            {
+              "alias": "alpha"
+            }
+          ]
+        }
+      ],
+      "integrity": [
+        {
+          "name": "Fixture row count",
+          "passed": true,
+          "expectedSqlState": null,
+          "execution": {
+            "label": "Fixture row count",
+            "sql": "SELECT count(*)::int AS total FROM aliases",
+            "status": "ok",
+            "elapsedMs": 0.5071720000014466,
+            "commands": [
+              {
+                "command": "SELECT",
+                "rowCount": 1
+              }
+            ],
+            "sqlState": null,
+            "detail": null
+          },
+          "rows": [
+            {
+              "total": 3
+            }
+          ]
+        },
+        {
+          "name": "Duplicate aliases and affected IDs",
+          "passed": true,
+          "expectedSqlState": null,
+          "execution": {
+            "label": "Duplicate aliases and affected IDs",
+            "sql": "SELECT alias, array_agg(id ORDER BY id) AS ids FROM aliases GROUP BY alias HAVING count(*) > 1 ORDER BY alias",
+            "status": "ok",
+            "elapsedMs": 0.47166400000060094,
+            "commands": [
+              {
+                "command": "SELECT",
+                "rowCount": 1
+              }
+            ],
+            "sqlState": null,
+            "detail": null
+          },
+          "rows": [
+            {
+              "alias": "alpha",
+              "ids": [
+                1,
+                2
+              ]
+            }
+          ]
+        }
+      ],
+      "plan": null
+    }
+  },
+  "correction": {
+    "setup": [
+      {
+        "label": "Create baseline schema",
+        "sql": "CREATE TABLE aliases (id integer PRIMARY KEY, alias text NOT NULL);\n",
+        "status": "ok",
+        "elapsedMs": 2.745612999999139,
+        "commands": [
+          {
+            "command": "CREATE",
+            "rowCount": null
+          }
+        ],
+        "sqlState": null,
+        "detail": null
+      },
+      {
+        "label": "Seed deterministic synthetic records",
+        "sql": "INSERT INTO aliases VALUES (1, 'alpha'), (2, 'alpha'), (3, 'beta');\n",
+        "status": "ok",
+        "elapsedMs": 0.5427200000012817,
+        "commands": [
+          {
+            "command": "INSERT",
+            "rowCount": 3
+          }
+        ],
+        "sqlState": null,
+        "detail": null
+      }
+    ],
+    "baseline": {
+      "schema": [
+        {
+          "kind": "column",
+          "relation": "aliases",
+          "name": "id",
+          "definition": "integer",
+          "nullable": false,
+          "generated": null
+        },
+        {
+          "kind": "column",
+          "relation": "aliases",
+          "name": "alias",
+          "definition": "text",
+          "nullable": false,
+          "generated": null
+        },
+        {
+          "kind": "constraint",
+          "relation": "aliases",
+          "name": "aliases_pkey",
+          "definition": "PRIMARY KEY (id)"
+        },
+        {
+          "kind": "index",
+          "relation": "aliases",
+          "name": "aliases_pkey",
+          "definition": "CREATE UNIQUE INDEX aliases_pkey ON public.aliases USING btree (id)"
+        }
+      ],
+      "compatibility": [
+        {
+          "name": "Existing alias lookup",
+          "passed": true,
+          "expectedSqlState": null,
+          "execution": {
+            "label": "Existing alias lookup",
+            "sql": "SELECT alias FROM aliases WHERE id = 1",
+            "status": "ok",
+            "elapsedMs": 0.2507530000002589,
+            "commands": [
+              {
+                "command": "SELECT",
+                "rowCount": 1
+              }
+            ],
+            "sqlState": null,
+            "detail": null
+          },
+          "rows": [
+            {
+              "alias": "alpha"
+            }
+          ]
+        }
+      ],
+      "integrity": [
+        {
+          "name": "Fixture row count",
+          "passed": true,
+          "expectedSqlState": null,
+          "execution": {
+            "label": "Fixture row count",
+            "sql": "SELECT count(*)::int AS total FROM aliases",
+            "status": "ok",
+            "elapsedMs": 0.29252700000142795,
+            "commands": [
+              {
+                "command": "SELECT",
+                "rowCount": 1
+              }
+            ],
+            "sqlState": null,
+            "detail": null
+          },
+          "rows": [
+            {
+              "total": 3
+            }
+          ]
+        },
+        {
+          "name": "Duplicate aliases and affected IDs",
+          "passed": true,
+          "expectedSqlState": null,
+          "execution": {
+            "label": "Duplicate aliases and affected IDs",
+            "sql": "SELECT alias, array_agg(id ORDER BY id) AS ids FROM aliases GROUP BY alias HAVING count(*) > 1 ORDER BY alias",
+            "status": "ok",
+            "elapsedMs": 0.4319199999990815,
+            "commands": [
+              {
+                "command": "SELECT",
+                "rowCount": 1
+              }
+            ],
+            "sqlState": null,
+            "detail": null
+          },
+          "rows": [
+            {
+              "alias": "alpha",
+              "ids": [
+                1,
+                2
+              ]
+            }
+          ]
+        }
+      ],
+      "plan": null
+    },
+    "migration": {
+      "label": "Apply correction migration",
+      "sql": "WITH ranked AS (\n  SELECT id, row_number() OVER (PARTITION BY alias ORDER BY id) AS occurrence\n  FROM aliases\n)\nUPDATE aliases SET alias = aliases.alias || '-demo-' || aliases.id\nFROM ranked WHERE ranked.id = aliases.id AND ranked.occurrence > 1;\nALTER TABLE aliases ADD CONSTRAINT aliases_alias_key UNIQUE (alias);\n",
+      "status": "ok",
+      "elapsedMs": 1.0372569999999541,
+      "commands": [
+        {
+          "command": "UPDATE",
+          "rowCount": 1
+        },
+        {
+          "command": "ALTER",
+          "rowCount": null
+        }
+      ],
+      "sqlState": null,
+      "detail": null
+    },
+    "disposition": "committed",
+    "diagnostics": [
+      {
+        "name": "Transaction committed",
+        "passed": true,
+        "expectedSqlState": null,
+        "execution": {
+          "label": "Close migration transaction",
+          "sql": "COMMIT",
+          "status": "ok",
+          "elapsedMs": 0.165592999997898,
+          "commands": [
+            {
+              "command": "COMMIT",
+              "rowCount": null
+            }
+          ],
+          "sqlState": null,
+          "detail": null
+        },
+        "rows": []
+      }
+    ],
+    "after": {
+      "schema": [
+        {
+          "kind": "column",
+          "relation": "aliases",
+          "name": "id",
+          "definition": "integer",
+          "nullable": false,
+          "generated": null
+        },
+        {
+          "kind": "column",
+          "relation": "aliases",
+          "name": "alias",
+          "definition": "text",
+          "nullable": false,
+          "generated": null
+        },
+        {
+          "kind": "constraint",
+          "relation": "aliases",
+          "name": "aliases_alias_key",
+          "definition": "UNIQUE (alias)"
+        },
+        {
+          "kind": "constraint",
+          "relation": "aliases",
+          "name": "aliases_pkey",
+          "definition": "PRIMARY KEY (id)"
+        },
+        {
+          "kind": "index",
+          "relation": "aliases",
+          "name": "aliases_alias_key",
+          "definition": "CREATE UNIQUE INDEX aliases_alias_key ON public.aliases USING btree (alias)"
+        },
+        {
+          "kind": "index",
+          "relation": "aliases",
+          "name": "aliases_pkey",
+          "definition": "CREATE UNIQUE INDEX aliases_pkey ON public.aliases USING btree (id)"
+        }
+      ],
+      "compatibility": [
+        {
+          "name": "Existing alias lookup",
+          "passed": true,
+          "expectedSqlState": null,
+          "execution": {
+            "label": "Existing alias lookup",
+            "sql": "SELECT alias FROM aliases WHERE id = 1",
+            "status": "ok",
+            "elapsedMs": 0.2217820000005304,
+            "commands": [
+              {
+                "command": "SELECT",
+                "rowCount": 1
+              }
+            ],
+            "sqlState": null,
+            "detail": null
+          },
+          "rows": [
+            {
+              "alias": "alpha"
+            }
+          ]
+        }
+      ],
+      "integrity": [
+        {
+          "name": "Fixture row count",
+          "passed": true,
+          "expectedSqlState": null,
+          "execution": {
+            "label": "Fixture row count",
+            "sql": "SELECT count(*)::int AS total FROM aliases",
+            "status": "ok",
+            "elapsedMs": 0.2642439999981434,
+            "commands": [
+              {
+                "command": "SELECT",
+                "rowCount": 1
+              }
+            ],
+            "sqlState": null,
+            "detail": null
+          },
+          "rows": [
+            {
+              "total": 3
+            }
+          ]
+        },
+        {
+          "name": "Resolved aliases by ID",
+          "passed": true,
+          "expectedSqlState": null,
+          "execution": {
+            "label": "Resolved aliases by ID",
+            "sql": "SELECT id, alias FROM aliases ORDER BY id",
+            "status": "ok",
+            "elapsedMs": 0.16834100000050967,
+            "commands": [
+              {
+                "command": "SELECT",
+                "rowCount": 3
+              }
+            ],
+            "sqlState": null,
+            "detail": null
+          },
+          "rows": [
+            {
+              "id": 1,
+              "alias": "alpha"
+            },
+            {
+              "id": 2,
+              "alias": "alpha-demo-2"
+            },
+            {
+              "id": 3,
+              "alias": "beta"
+            }
+          ]
+        },
+        {
+          "name": "New duplicate alias is rejected",
+          "passed": true,
+          "expectedSqlState": "23505",
+          "execution": {
+            "label": "New duplicate alias is rejected",
+            "sql": "INSERT INTO aliases VALUES (4, 'alpha')",
+            "status": "error",
+            "elapsedMs": 0.7281699999984994,
+            "commands": [],
+            "sqlState": "23505",
+            "detail": "Existing data violates a unique constraint."
+          },
+          "rows": []
+        }
+      ],
+      "plan": null
+    }
+  },
+  "confirmedFailures": [
+    {
+      "code": "MIGRATION_ERROR",
+      "evidence": "Existing data violates a unique constraint.",
+      "sqlState": "23505"
+    }
+  ],
+  "verification": {
+    "passed": true,
+    "expectation": "PostgreSQL rejects the proposed constraint with 23505. The correction resolves the fixture duplicates and stores the unique constraint."
+  },
+  "review": {
+    "required": true,
+    "status": "pending",
+    "reason": "Require explicit human review of the proposal, evidence and rollout plan before merge or deploy."
+  },
+  "followUp": [
+    "Agree on an alias collision policy with owners of dependent systems.",
+    "Check for follow-on collisions before running a real backfill."
+  ]
+}
